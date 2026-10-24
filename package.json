@@ -1,9 +1,13 @@
 {
   "name": "hack2026",
   "private": true,
-  "workspaces": ["web", "functions"],
+  "workspaces": [
+    "web",
+    "functions"
+  ],
   "scripts": {
     "dev": "npm run build -w functions && concurrently -k -n fn,emu,web -c yellow,magenta,cyan \"npm run build:watch -w functions\" \"firebase emulators:start\" \"npm run dev -w web\"",
+    "dev:mock": "VITE_USE_MOCKS=true npm run dev",
     "seed": "tsx scripts/seed.ts",
     "test": "npm test --workspaces --if-present",
     "build": "npm run build --workspaces"
