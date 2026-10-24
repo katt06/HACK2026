@@ -13,7 +13,17 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { toGroupSummary, type CallableName, type Callables, type ContributionEntry, type ExpenseEntry, type GoalDoc, type GoalEntryDoc, type GroupDoc } from "@contract";
+import {
+  toGroupSummary,
+  type CallableName,
+  type Callables,
+  type ContributionEntry,
+  type ExpenseEntry,
+  type GoalDoc,
+  type GoalEntryDoc,
+  type GroupDoc,
+  type ScoreDoc,
+} from "@contract";
 import { auth, db, functions } from "../firebase";
 import { generateInviteCode } from "../lib/inviteCode";
 import type { Api } from "./types";
@@ -41,6 +51,10 @@ export const realApi: Api = {
   getChallenges: () => call("getChallenges", {}),
   completeChallenge: (challengeId) => call("completeChallenge", { challengeId }),
   getLeaderboard: (groupId) => call("getLeaderboard", { groupId }),
+  async getMyScore() {
+    const snap = await getDoc(doc(db, "scores", signedInUser().uid));
+    return snap.exists() ? (snap.data() as ScoreDoc) : null;
+  },
 
   // Groups are read and created directly in Firestore (security rules enforce the shape);
   // joining needs the Admin SDK, so it goes through a callable.

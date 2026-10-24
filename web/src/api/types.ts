@@ -7,6 +7,7 @@ import type {
   GoalEntryDoc,
   GroupSummary,
   IsoDate,
+  ScoreDoc,
   JoinGroupResponse,
   WithId,
 } from "@contract";
@@ -29,6 +30,7 @@ export interface Api {
   getChallenges(): Promise<GetChallengesResponse>;
   completeChallenge(challengeId: string): Promise<CompleteChallengeResponse>;
   getLeaderboard(groupId: string): Promise<GetLeaderboardResponse>;
+  getMyScore(): Promise<ScoreDoc | null>; // null until the user has a score doc
 
   getMyGroups(): Promise<GroupSummary[]>;
   // Live version: calls onChange now and on every change. Returns an unsubscribe function.

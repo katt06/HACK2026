@@ -239,3 +239,13 @@ describe("goals", () => {
     await expect(api.addContribution(mine.id, 100)).rejects.toMatchObject({ code: "not-found" });
   });
 });
+
+describe("getMyScore", () => {
+  it("returns my score and reflects completed challenges", async () => {
+    const { api } = setup();
+    expect(await api.getMyScore()).toMatchObject({ userId: "mock-demo-hero", points: 280, streak: 4 });
+    const [c] = (await api.getChallenges()).challenges;
+    await api.completeChallenge(c.id);
+    expect((await api.getMyScore())?.points).toBe(280 + c.points);
+  });
+});
