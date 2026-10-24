@@ -1,0 +1,16 @@
+{
+  "name": "hack2026",
+  "private": true,
+  "workspaces": ["web", "functions"],
+  "scripts": {
+    "dev": "npm run build -w functions && concurrently -k -n fn,emu,web -c yellow,magenta,cyan \"npm run build:watch -w functions\" \"firebase emulators:start\" \"npm run dev -w web\"",
+    "seed": "tsx scripts/seed.ts",
+    "test": "npm test --workspaces --if-present",
+    "build": "npm run build --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "firebase-tools": "^14.0.0",
+    "tsx": "^4.19.0"
+  }
+}
