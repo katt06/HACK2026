@@ -18,6 +18,7 @@ export type WithId<T> = T & { id: string };
 export const CATEGORIES = [
   "groceries",
   "dining",
+  "delivery",
   "coffee",
   "shopping",
   "entertainment",
@@ -29,6 +30,7 @@ export const CATEGORIES = [
   "utilities",
   "insurance",
   "medical",
+  "income",
   "other",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -129,6 +131,13 @@ export interface TransactionDoc {
   merchant: string;
   date: IsoDate;
   recurringId: string | null;
+}
+
+// accounts/{uid} (server-only): the checking balance the forecast starts from.
+export interface AccountDoc {
+  userId: string;
+  currentBalance: Cents;
+  asOf: IsoDate;
 }
 
 // recurring/{id} (server-only)

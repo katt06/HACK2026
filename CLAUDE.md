@@ -25,6 +25,7 @@
 - users/{uid}: displayName, baselineSpendByCategory, settings
 - goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation, pausedUntil, createdAt
 - goals/{id}/entries/{id}: kind (contribution | expense), amount, note, createdAt; contributions have verified (clients can only write false); expenses have choice (pause | lowerPace), weeksLater
+- accounts/{uid} (server-only): userId, currentBalance, asOf
 - transactions/{id} (server-only): userId, amount, category, merchant, date, recurringId
 - recurring/{id} (server-only): userId, merchant, amount, cadence, nextDue
 - challenges/{id}: userId, type, description, points, difficulty, status, completedAt, reason
