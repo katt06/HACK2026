@@ -197,3 +197,45 @@ describe("watchMyGroups", () => {
     expect(() => controls.simulateJoin("steady-saver")).toThrow("Priya is already in Demo Squad.");
   });
 });
+
+describe("goals", () => {
+  it("seeds each persona's goal to match their score's progress", async () => {
+    for (const p of PERSONAS) {
+      const { api } = setup({ settings: { persona: p.id } });
+      const [goal] = await api.getMyGoals();
+      expect(Math.round((goal.currentAmount / goal.targetAmount) * 100)).toBe(p.score.goalProgressPct);
+    }
+  });
+
+  it("creates a goal and logs unverified contributions, newest first", async () => {
+    const { api } = setup();
+    const goal = await api.createGoal({ name: " Concert ", targetAmount: 20000, deadline: "2026-12-01" });
+    expect(goal).toMatchObject({ name: "Concert", currentAmount: 0, verified: false, pausedUntil: null });
+    await api.addContribution(goal.id, 2500, "first");
+    await api.addContribution(goal.id, 1000);
+    const { goal: after, entries } = await api.getGoal(goal.id);
+    expect(after.currentAmount).toBe(3500);
+    expect(entries.map((e) => [e.amount, e.kind === "contribution" && e.verified])).toEqual([[1000, false], [2500, false]]);
+    expect((await api.getMyGoals()).map((g) => g.name)).toEqual(["Concert", "Spring break trip"]);
+  });
+
+  it("applies a flex choice and records the expense without touching the balance", async () => {
+    const { api } = setup();
+    const [goal] = await api.getMyGoals();
+    const option = { choice: "pause" as const, weeklyPace: 5800, newDeadline: "2027-02-06", pausedUntil: "2026-11-07", weeksLater: 2 };
+    await api.applyGoalFlex(goal.id, 9000, option, "Car repair");
+    const { goal: after, entries } = await api.getGoal(goal.id);
+    expect(after).toMatchObject({ deadline: "2027-02-06", pausedUntil: "2026-11-07", currentAmount: goal.currentAmount });
+    expect(entries[0]).toMatchObject({ kind: "expense", amount: 9000, choice: "pause", weeksLater: 2, note: "Car repair" });
+  });
+
+  it("rejects invalid goals and other personas' goals", async () => {
+    const { api, controls } = setup();
+    await expect(api.createGoal({ name: "", targetAmount: 100, deadline: "2026-12-01" })).rejects.toBeDefined();
+    await expect(api.createGoal({ name: "Past", targetAmount: 100, deadline: "2026-10-24" })).rejects.toBeDefined();
+    const [mine] = await api.getMyGoals();
+    controls.persona("steady-saver");
+    await expect(api.getGoal(mine.id)).rejects.toMatchObject({ code: "not-found" });
+    await expect(api.addContribution(mine.id, 100)).rejects.toMatchObject({ code: "not-found" });
+  });
+});

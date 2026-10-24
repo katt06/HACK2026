@@ -88,9 +88,38 @@ export interface GoalDoc {
   targetAmount: Cents;
   currentAmount: Cents;
   deadline: IsoDate;
-  verified: boolean; // currentAmount confirmed against linked account data
-  sizingRecommendation: SizingRecommendation | null;
+  verified: boolean; // currentAmount confirmed against linked account data (server-only)
+  sizingRecommendation: SizingRecommendation | null; // server-only
+  pausedUntil: IsoDate | null; // set by goal flex "pause"; no saving expected before this date
+  createdAt: IsoDateTime;
 }
+
+export const GOAL_NAME_MAX = 60;
+
+// goals/{goalId}/entries/{id}: the goal's activity log.
+// Contributions logged by the user are always unverified; only the server can mark one verified.
+export interface ContributionEntry {
+  kind: "contribution";
+  amount: Cents;
+  verified: boolean;
+  note: string;
+  createdAt: IsoDateTime;
+}
+
+// Goal flex: an unexpected expense squeezed the budget (the goal balance is untouched).
+// "pause" = skip saving for a few weeks, same pace after; "lowerPace" = save less per week, finish later.
+export type FlexChoice = "pause" | "lowerPace";
+
+export interface ExpenseEntry {
+  kind: "expense";
+  amount: Cents;
+  choice: FlexChoice;
+  weeksLater: number; // how far the deadline moved
+  note: string;
+  createdAt: IsoDateTime;
+}
+
+export type GoalEntryDoc = ContributionEntry | ExpenseEntry;
 
 // transactions/{id} (server-only)
 export interface TransactionDoc {

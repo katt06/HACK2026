@@ -4,8 +4,11 @@ import {
   MAX_GROUP_MEMBERS,
   normalizeInviteCode,
   toGroupSummary,
+  GOAL_NAME_MAX,
   type ChallengeDoc,
   type CompleteChallengeResponse,
+  type GoalDoc,
+  type GoalEntryDoc,
   type GetLeaderboardResponse,
   type GetSafeToSaveResponse,
   type GroupDoc,
@@ -15,6 +18,7 @@ import {
   type WithId,
 } from "@contract";
 import { formatCents } from "../lib/format";
+import { addDays as addIsoDays, todayIso } from "../lib/dates";
 import { generateInviteCode } from "../lib/inviteCode";
 import { DEFAULT_PERSONA, MOCK_GROUPS, PERSONAS, type ChallengeSeed, type Persona, type PersonaId } from "./mockData";
 import type { Api, ApiMethod } from "./types";
@@ -90,6 +94,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
   const settings: MockSettings = { persona: DEFAULT_PERSONA, errorRate: 0, failOnly: [], ...options.settings };
   let state = initialState();
   let groups = initialGroups();
+  let goals = initialGoals();
 
   function initialState(): Map<PersonaId, PersonaState> {
     const createdAt = now().toISOString();
@@ -119,6 +124,51 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
       ]),
     );
   }
+
+  interface MockGoal {
+    goal: GoalDoc;
+    entries: WithId<GoalEntryDoc>[]; // newest first
+  }
+
+  function initialGoals(): Map<string, MockGoal> {
+    const t = now();
+    const daysAgo = (n: number) => new Date(t.getTime() - n * 86_400_000).toISOString();
+    return new Map(
+      PERSONAS.map((p) => {
+        const contributions = [...p.goal.contributions].sort((a, b) => a.daysAgo - b.daysAgo);
+        const goal: GoalDoc = {
+          ownerId: uidFor(p.id),
+          name: p.goal.name,
+          targetAmount: p.goal.targetAmount,
+          currentAmount: contributions.reduce((sum, c) => sum + c.amount, 0),
+          deadline: addIsoDays(todayIso(t), p.goal.deadlineInDays),
+          verified: false,
+          sizingRecommendation: null,
+          pausedUntil: null,
+          createdAt: daysAgo(Math.max(...contributions.map((c) => c.daysAgo)) + 1),
+        };
+        const entries = contributions.map((c, i): WithId<GoalEntryDoc> => ({
+          id: `${p.id}-entry-${i + 1}`,
+          kind: "contribution",
+          amount: c.amount,
+          verified: c.verified,
+          note: c.note,
+          createdAt: daysAgo(c.daysAgo),
+        }));
+        return [`${p.id}-goal`, { goal, entries }];
+      }),
+    );
+  }
+
+  // Missing and not-mine look the same, like Firestore rules.
+  function myGoal(goalId: string): MockGoal {
+    const g = goals.get(goalId);
+    if (!g || g.goal.ownerId !== uidFor(settings.persona)) throw new FirebaseError("not-found", "Goal not found.");
+    return g;
+  }
+
+  let entryCount = 0;
+  const addEntry = (g: MockGoal, entry: GoalEntryDoc) => g.entries.unshift({ ...entry, id: `mock-entry-${++entryCount}` });
 
   const groupSummary = (id: string): GroupSummary => toGroupSummary(id, groups.get(id)!, uidFor(settings.persona));
   const myGroupIds = () => [...groups.keys()].filter((id) => groups.get(id)!.members.includes(uidFor(settings.persona)));
@@ -275,6 +325,65 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         }
         return { group: groupSummary(id), alreadyMember };
       }),
+
+    getMyGoals: () =>
+      respond("getMyGoals", () =>
+        [...goals.entries()]
+          .filter(([, g]) => g.goal.ownerId === uidFor(settings.persona))
+          .map(([id, g]) => ({ ...g.goal, id }))
+          .sort((a, b) => a.deadline.localeCompare(b.deadline)),
+      ),
+
+    getGoal: (goalId) =>
+      respond("getGoal", () => {
+        const g = myGoal(goalId);
+        return { goal: { ...g.goal, id: goalId }, entries: g.entries };
+      }),
+
+    createGoal: ({ name, targetAmount, deadline }) =>
+      respond("createGoal", () => {
+        const trimmed = name.trim();
+        const valid =
+          trimmed.length > 0 && trimmed.length <= GOAL_NAME_MAX && Number.isInteger(targetAmount) && targetAmount > 0 && deadline > todayIso(now());
+        if (!valid) throw new FirebaseError("permission-denied", "Invalid goal.");
+        const id = `mock-goal-${goals.size + 1}`;
+        const goal: GoalDoc = {
+          ownerId: uidFor(settings.persona),
+          name: trimmed,
+          targetAmount,
+          currentAmount: 0,
+          deadline,
+          verified: false,
+          sizingRecommendation: null,
+          pausedUntil: null,
+          createdAt: now().toISOString(),
+        };
+        goals.set(id, { goal, entries: [] });
+        return { ...goal, id };
+      }),
+
+    addContribution: (goalId, amount, note = "") =>
+      respond("addContribution", () => {
+        if (!Number.isInteger(amount) || amount <= 0) throw new FirebaseError("permission-denied", "Invalid amount.");
+        const g = myGoal(goalId);
+        g.goal.currentAmount += amount;
+        addEntry(g, { kind: "contribution", amount, verified: false, note: note.trim(), createdAt: now().toISOString() });
+      }),
+
+    applyGoalFlex: (goalId, expenseAmount, option, note = "") =>
+      respond("applyGoalFlex", () => {
+        const g = myGoal(goalId);
+        g.goal.deadline = option.newDeadline;
+        g.goal.pausedUntil = option.pausedUntil;
+        addEntry(g, {
+          kind: "expense",
+          amount: expenseAmount,
+          choice: option.choice,
+          weeksLater: option.weeksLater,
+          note: note.trim(),
+          createdAt: now().toISOString(),
+        });
+      }),
   };
 
   const changed = () => options.onSettingsChange?.({ ...settings, failOnly: [...settings.failOnly] });
@@ -298,6 +407,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
     reset() {
       state = initialState();
       groups = initialGroups();
+      goals = initialGoals();
       notify();
     },
     status() {
