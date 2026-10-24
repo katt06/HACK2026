@@ -2,35 +2,14 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
-  INVITE_CODE_ALPHABET,
-  INVITE_CODE_LENGTH,
   MAX_GROUP_MEMBERS,
+  normalizeInviteCode,
+  toGroupSummary,
   type GroupDoc,
-  type GroupSummary,
   type JoinGroupRequest,
   type JoinGroupResponse,
 } from "./contract.js";
 import { requireAuth, requireString } from "./validate.js";
-
-// "save-42 ab" → "SAVE42AB". Returns null unless the result is a well-formed code.
-export function normalizeInviteCode(raw: string): string | null {
-  const code = raw.toUpperCase().replace(/[\s-]/g, "");
-  const valid = code.length === INVITE_CODE_LENGTH && [...code].every((c) => INVITE_CODE_ALPHABET.includes(c));
-  return valid ? code : null;
-}
-
-export function toGroupSummary(id: string, group: GroupDoc, viewerUid: string): GroupSummary {
-  return {
-    id,
-    name: group.name,
-    inviteCode: group.inviteCode,
-    members: group.members.map((userId) => ({
-      userId,
-      displayName: group.memberNames[userId] ?? "Member",
-      isMe: userId === viewerUid,
-    })),
-  };
-}
 
 export const joinGroup = onCall<JoinGroupRequest>(async (request): Promise<JoinGroupResponse> => {
   const uid = requireAuth(request);

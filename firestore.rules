@@ -25,6 +25,65 @@ service cloud.firestore {
         && g.inviteCode.matches('^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$');
     }
 
+    // Goals are private to their owner. Clients can edit the plan and log entries, but
+    // verified and sizingRecommendation are server-only, and logged contributions are always unverified.
+    match /goals/{goalId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if signedIn() && validNewGoal(request.resource.data);
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'targetAmount', 'deadline', 'pausedUntil', 'currentAmount'])
+        && validGoalFields(request.resource.data);
+
+      match /entries/{entryId} {
+        allow read: if ownsGoal(goalId);
+        allow create: if ownsGoal(goalId) && validNewEntry(request.resource.data);
+      }
+    }
+
+    function ownsGoal(goalId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/goals/$(goalId)).data.ownerId == request.auth.uid;
+    }
+
+    function isDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validGoalFields(g) {
+      return g.name is string && g.name.size() > 0 && g.name.size() <= 60
+        && g.targetAmount is int && g.targetAmount > 0
+        && g.currentAmount is int && g.currentAmount >= 0
+        && isDate(g.deadline)
+        && (g.pausedUntil == null || isDate(g.pausedUntil));
+    }
+
+    function validNewGoal(g) {
+      return g.keys().hasOnly(['ownerId', 'name', 'targetAmount', 'currentAmount', 'deadline', 'verified', 'sizingRecommendation', 'pausedUntil', 'createdAt'])
+        && g.keys().hasAll(['ownerId', 'name', 'targetAmount', 'currentAmount', 'deadline', 'verified', 'sizingRecommendation', 'pausedUntil', 'createdAt'])
+        && g.ownerId == request.auth.uid
+        && g.currentAmount == 0
+        && g.verified == false
+        && g.sizingRecommendation == null
+        && g.createdAt is string
+        && validGoalFields(g);
+    }
+
+    function validNewEntry(e) {
+      return e.amount is int && e.amount > 0
+        && e.note is string && e.note.size() <= 80
+        && e.createdAt is string
+        && (
+          (e.kind == 'contribution'
+            && e.keys().hasOnly(['kind', 'amount', 'verified', 'note', 'createdAt'])
+            && e.verified == false)
+          || (e.kind == 'expense'
+            && e.keys().hasOnly(['kind', 'amount', 'choice', 'weeksLater', 'note', 'createdAt'])
+            && e.choice in ['pause', 'lowerPace']
+            && e.weeksLater is int)
+        );
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

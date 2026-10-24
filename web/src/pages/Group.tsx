@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { GroupSummary } from "@contract";
 import { api } from "../api";
@@ -42,7 +42,7 @@ function InviteBox({ group }: { group: GroupSummary }) {
   );
 }
 
-function GroupCard({ group }: { group: GroupSummary }) {
+function GroupCard({ group, fresh }: { group: GroupSummary; fresh: Set<string> }) {
   return (
     <section className={card}>
       <div className="flex items-baseline justify-between gap-4">
@@ -54,7 +54,10 @@ function GroupCard({ group }: { group: GroupSummary }) {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ul className="space-y-2">
           {group.members.map((m) => (
-            <li key={m.userId} className="flex items-center gap-3">
+            <li
+              key={m.userId}
+              className={`-mx-2 flex items-center gap-3 rounded-xl px-2 py-1 transition-colors duration-1000 ${fresh.has(m.userId) ? "bg-emerald-100" : ""}`}
+            >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 font-semibold text-slate-600">
                 {m.displayName.charAt(0).toUpperCase()}
               </span>
@@ -112,14 +115,31 @@ export default function Group() {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<GroupSummary[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [fresh, setFresh] = useState<Set<string>>(new Set()); // userIds that just joined
+  const previous = useRef<GroupSummary[] | null>(null);
   const [notice, setNotice] = useState<string>((location.state as { notice?: string } | null)?.notice ?? "");
 
-  const load = useCallback(() => {
+  // Live member list: announce and briefly highlight anyone who joins one of my groups.
+  useEffect(() => {
     setLoadFailed(false);
-    api.getMyGroups().then(setGroups).catch(() => setLoadFailed(true));
-  }, []);
-
-  useEffect(load, [load]);
+    return api.watchMyGroups(
+      (next) => {
+        const joined = next.flatMap((g) => {
+          const before = previous.current?.find((p) => p.id === g.id);
+          return before ? g.members.filter((m) => !m.isMe && !before.members.some((b) => b.userId === m.userId)).map((m) => ({ m, g })) : [];
+        });
+        previous.current = next;
+        setGroups(next);
+        if (joined.length === 0) return;
+        setNotice(joined.map(({ m, g }) => `${m.displayName} just joined ${g.name}!`).join(" "));
+        const ids = joined.map(({ m }) => m.userId);
+        setFresh((s) => new Set([...s, ...ids]));
+        setTimeout(() => setFresh((s) => new Set([...s].filter((id) => !ids.includes(id)))), 3000);
+      },
+      () => setLoadFailed(true),
+    );
+  }, [retry]);
 
   // Drop the one-time notice from history so it doesn't reappear on reload.
   useEffect(() => {
@@ -140,7 +160,7 @@ export default function Group() {
         {loadFailed && (
           <div className={`${card} text-center`}>
             <p className="text-slate-600">Couldn't load your groups.</p>
-            <button onClick={load} className="mt-2 font-semibold text-emerald-600">
+            <button onClick={() => setRetry((n) => n + 1)} className="mt-2 font-semibold text-emerald-600">
               Try again
             </button>
           </div>
@@ -149,24 +169,18 @@ export default function Group() {
         {groups?.length === 0 && (
           <p className={`${card} text-slate-600`}>You're not in a group yet. Start one below, or join a friend's with their code.</p>
         )}
-        {groups?.map((g) => <GroupCard key={g.id} group={g} />)}
+        {groups?.map((g) => <GroupCard key={g.id} group={g} fresh={fresh} />)}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <section className={card}>
             <h2 className="mb-3 text-lg font-bold">Start a group</h2>
-            <CreateGroupForm
-              onCreated={(g) => {
-                setGroups((prev) => [...(prev ?? []), g]);
-                setNotice(`${g.name} is ready. Share the code to invite friends.`);
-              }}
-            />
+            <CreateGroupForm onCreated={(g) => setNotice(`${g.name} is ready. Share the code to invite friends.`)} />
           </section>
           <section className={card}>
             <h2 className="mb-3 text-lg font-bold">Join with a code</h2>
             <JoinGroupForm
               onJoined={({ group, alreadyMember }) => {
                 setNotice(alreadyMember ? `You're already in ${group.name}.` : `You joined ${group.name}!`);
-                load();
               }}
             />
           </section>

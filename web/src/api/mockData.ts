@@ -17,6 +17,8 @@ export interface Persona {
   paydayInDays: number;
   insight: string; // story-specific line added to the safe-to-save explanation
   score: Omit<ScoreDoc, "userId" | "level">; // level is derived from points
+  // currentAmount is the sum of contributions; chosen so progress matches score.goalProgressPct.
+  goal: { name: string; targetAmount: Cents; deadlineInDays: number; contributions: { amount: Cents; daysAgo: number; verified: boolean; note: string }[] };
   challenges: ChallengeSeed[]; // first 3 start active; the rest refill as challenges are completed
 }
 
@@ -51,6 +53,15 @@ export const PERSONAS: Persona[] = [
     paydayInDays: 7,
     insight: "Food delivery has averaged about $95 a week lately, so the forecast leaves room for it for now.",
     score: { goalProgressPct: 31, streak: 2, improvementScore: 44, points: 240 },
+    goal: {
+      name: "Emergency fund",
+      targetAmount: 100000,
+      deadlineInDays: 120,
+      contributions: [
+        { amount: 20000, daysAgo: 21, verified: true, note: "" },
+        { amount: 11000, daysAgo: 6, verified: false, note: "Skipped delivery all weekend" },
+      ],
+    },
     challenges: [
       {
         type: "cook_at_home",
@@ -103,6 +114,15 @@ export const PERSONAS: Persona[] = [
     paydayInDays: 9,
     insight: "Your income has varied a lot lately, so we use a bigger cushion and assume your next payment arrives on the late side.",
     score: { goalProgressPct: 48, streak: 5, improvementScore: 61, points: 300 },
+    goal: {
+      name: "Slow-month cushion",
+      targetAmount: 150000,
+      deadlineInDays: 90,
+      contributions: [
+        { amount: 50000, daysAgo: 30, verified: true, note: "" },
+        { amount: 22000, daysAgo: 4, verified: false, note: "Big client payment came in" },
+      ],
+    },
     challenges: [
       {
         type: "no_spend_day",
@@ -161,6 +181,12 @@ export const PERSONAS: Persona[] = [
     paydayInDays: 10,
     insight: "Subscriptions now cost about $133 a month, up from $48 a year ago.",
     score: { goalProgressPct: 22, streak: 1, improvementScore: 38, points: 180 },
+    goal: {
+      name: "New laptop",
+      targetAmount: 140000,
+      deadlineInDays: 100,
+      contributions: [{ amount: 30800, daysAgo: 10, verified: false, note: "Canceled two streaming apps" }],
+    },
     challenges: [
       {
         type: "subscription_review",
@@ -213,6 +239,15 @@ export const PERSONAS: Persona[] = [
     paydayInDays: 7,
     insight: "You've stayed under your usual spending six weeks in a row. Nice work.",
     score: { goalProgressPct: 74, streak: 12, improvementScore: 82, points: 620 },
+    goal: {
+      name: "Japan trip",
+      targetAmount: 400000,
+      deadlineInDays: 70,
+      contributions: [
+        { amount: 250000, daysAgo: 60, verified: true, note: "" },
+        { amount: 46000, daysAgo: 7, verified: true, note: "" },
+      ],
+    },
     challenges: [
       {
         type: "no_spend_day",
@@ -267,6 +302,16 @@ export const PERSONAS: Persona[] = [
     paydayInDays: 6,
     insight: "Coffee shops were about $48 last week, so today's challenge targets that.",
     score: { goalProgressPct: 42, streak: 4, improvementScore: 63, points: 280 },
+    goal: {
+      name: "Spring break trip",
+      targetAmount: 120000,
+      deadlineInDays: 84,
+      contributions: [
+        { amount: 20000, daysAgo: 14, verified: true, note: "" },
+        { amount: 15400, daysAgo: 7, verified: false, note: "Coffee money from this week" },
+        { amount: 15000, daysAgo: 2, verified: false, note: "" },
+      ],
+    },
     challenges: [
       {
         type: "brew_at_home",

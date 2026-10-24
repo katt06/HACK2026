@@ -8,7 +8,8 @@
 ## Repo layout
 - /web: React app
 - /functions: Cloud Functions
-- /functions/src/contract.ts: shared types and callable signatures. The web app imports these as type-only imports via a Vite alias `@contract`.
+- /functions/src/contract.ts: shared types, constants, and small pure helpers, imported by /web via the Vite alias `@contract`. It must not import anything, so it stays safe to bundle on both sides.
+- /web/src/api: the only place the web app talks to the backend (Firestore data and callables). Components import from `api/index.ts` and never touch Firestore or httpsCallable directly.
 - /scripts: seed data and bandit simulation
 
 ## Non-negotiable rules
@@ -22,7 +23,8 @@
 
 ## Data model
 - users/{uid}: displayName, baselineSpendByCategory, settings
-- goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation
+- goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation, pausedUntil, createdAt
+- goals/{id}/entries/{id}: kind (contribution | expense), amount, note, createdAt; contributions have verified (clients can only write false); expenses have choice (pause | lowerPace), weeksLater
 - transactions/{id} (server-only): userId, amount, category, merchant, date, recurringId
 - recurring/{id} (server-only): userId, merchant, amount, cadence, nextDue
 - challenges/{id}: userId, type, description, points, difficulty, status, completedAt, reason

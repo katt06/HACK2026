@@ -1,6 +1,6 @@
-// Shared contract between /web and /functions.
-// The web app imports this file type-only via the `@contract` alias,
-// so the only runtime values allowed here are plain constants.
+// Shared contract between /web and /functions (imported by /web via the `@contract` alias).
+// Types, constants, and small pure helpers only. This file must not import anything,
+// so it stays safe to bundle into both the browser and Cloud Functions.
 //
 // Conventions:
 // - Money is always integer cents (`Cents`). Format for display on the client.
@@ -88,9 +88,38 @@ export interface GoalDoc {
   targetAmount: Cents;
   currentAmount: Cents;
   deadline: IsoDate;
-  verified: boolean; // currentAmount confirmed against linked account data
-  sizingRecommendation: SizingRecommendation | null;
+  verified: boolean; // currentAmount confirmed against linked account data (server-only)
+  sizingRecommendation: SizingRecommendation | null; // server-only
+  pausedUntil: IsoDate | null; // set by goal flex "pause"; no saving expected before this date
+  createdAt: IsoDateTime;
 }
+
+export const GOAL_NAME_MAX = 60;
+
+// goals/{goalId}/entries/{id}: the goal's activity log.
+// Contributions logged by the user are always unverified; only the server can mark one verified.
+export interface ContributionEntry {
+  kind: "contribution";
+  amount: Cents;
+  verified: boolean;
+  note: string;
+  createdAt: IsoDateTime;
+}
+
+// Goal flex: an unexpected expense squeezed the budget (the goal balance is untouched).
+// "pause" = skip saving for a few weeks, same pace after; "lowerPace" = save less per week, finish later.
+export type FlexChoice = "pause" | "lowerPace";
+
+export interface ExpenseEntry {
+  kind: "expense";
+  amount: Cents;
+  choice: FlexChoice;
+  weeksLater: number; // how far the deadline moved
+  note: string;
+  createdAt: IsoDateTime;
+}
+
+export type GoalEntryDoc = ContributionEntry | ExpenseEntry;
 
 // transactions/{id} (server-only)
 export interface TransactionDoc {
@@ -159,6 +188,26 @@ export interface GroupSummary {
   name: string;
   inviteCode: string;
   members: GroupMember[];
+}
+
+// "sav-e 24" → "SAVE24". Returns null unless the result is a well-formed code.
+export function normalizeInviteCode(raw: string): string | null {
+  const code = raw.toUpperCase().replace(/[\s-]/g, "");
+  const valid = code.length === INVITE_CODE_LENGTH && [...code].every((c) => INVITE_CODE_ALPHABET.includes(c));
+  return valid ? code : null;
+}
+
+export function toGroupSummary(id: string, group: GroupDoc, viewerUid: string): GroupSummary {
+  return {
+    id,
+    name: group.name,
+    inviteCode: group.inviteCode,
+    members: group.members.map((userId) => ({
+      userId,
+      displayName: group.memberNames[userId] ?? "Member",
+      isMe: userId === viewerUid,
+    })),
+  };
 }
 
 // scores/{uid}. Readable by group members, so never put dollar amounts here.

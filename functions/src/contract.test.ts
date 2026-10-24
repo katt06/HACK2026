@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeInviteCode, toGroupSummary } from "./groups.js";
+import { normalizeInviteCode, toGroupSummary } from "./contract.js";
 
 describe("normalizeInviteCode", () => {
   it("uppercases and strips spaces and dashes", () => {

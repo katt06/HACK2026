@@ -4,6 +4,7 @@ import { AppLayout } from "./components/AppLayout";
 import Challenges from "./pages/Challenges";
 import Dashboard from "./pages/Dashboard";
 import Demo from "./pages/Demo";
+import GoalDetail from "./pages/GoalDetail";
 import Goals from "./pages/Goals";
 import Group from "./pages/Group";
 import Join from "./pages/Join";
@@ -20,6 +21,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/goals" element={<Goals />} />
+          <Route path="/goals/:goalId" element={<GoalDetail />} />
           <Route path="/challenges" element={<Challenges />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/group" element={<Group />} />

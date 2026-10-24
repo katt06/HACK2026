@@ -4,7 +4,7 @@ import { createMockApi, type MockControls, type MockSettings } from "./mockApi";
 import { realApi } from "./realApi";
 import type { Api } from "./types";
 
-export type { Api } from "./types";
+export type { Api, GoalDetail, NewGoal } from "./types";
 
 const SETTINGS_KEY = "mockApi.settings";
 
@@ -38,7 +38,7 @@ function pickApi(): Api {
   const { persona, errorRate } = controls.status();
   console.info(
     `%cMock API on%c as "${persona}"${errorRate ? `, error rate ${errorRate}` : ""}. ` +
-      `Try mock.persona("steady-saver"), mock.errors(1, ["getSafeToSave"]), mock.errors(0), mock.reset(), mock.status().`,
+      `Try mock.persona("steady-saver"), mock.errors(1, ["getSafeToSave"]), mock.errors(0), mock.simulateJoin("delivery-spender"), mock.reset(), mock.status().`,
     "background:#059669;color:white;padding:2px 6px;border-radius:4px",
     "",
   );
