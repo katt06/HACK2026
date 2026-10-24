@@ -38,7 +38,7 @@ function pickApi(): Api {
   const { persona, errorRate } = controls.status();
   console.info(
     `%cMock API on%c as "${persona}"${errorRate ? `, error rate ${errorRate}` : ""}. ` +
-      `Try mock.persona("steady-saver"), mock.errors(1, ["getSafeToSave"]), mock.errors(0), mock.reset(), mock.status().`,
+      `Try mock.persona("steady-saver"), mock.errors(1, ["getSafeToSave"]), mock.errors(0), mock.simulateJoin("delivery-spender"), mock.reset(), mock.status().`,
     "background:#059669;color:white;padding:2px 6px;border-radius:4px",
     "",
   );

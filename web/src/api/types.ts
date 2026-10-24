@@ -15,6 +15,8 @@ export interface Api {
   getLeaderboard(groupId: string): Promise<GetLeaderboardResponse>;
 
   getMyGroups(): Promise<GroupSummary[]>;
+  // Live version: calls onChange now and on every change. Returns an unsubscribe function.
+  watchMyGroups(onChange: (groups: GroupSummary[]) => void, onError: (err: unknown) => void): () => void;
   createGroup(name: string): Promise<GroupSummary>; // name: 1–40 chars after trimming
   joinGroup(inviteCode: string): Promise<JoinGroupResponse>;
 }

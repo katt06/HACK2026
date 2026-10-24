@@ -1,6 +1,6 @@
-// Shared contract between /web and /functions.
-// The web app imports this file type-only via the `@contract` alias,
-// so the only runtime values allowed here are plain constants.
+// Shared contract between /web and /functions (imported by /web via the `@contract` alias).
+// Types, constants, and small pure helpers only. This file must not import anything,
+// so it stays safe to bundle into both the browser and Cloud Functions.
 //
 // Conventions:
 // - Money is always integer cents (`Cents`). Format for display on the client.
@@ -159,6 +159,26 @@ export interface GroupSummary {
   name: string;
   inviteCode: string;
   members: GroupMember[];
+}
+
+// "sav-e 24" → "SAVE24". Returns null unless the result is a well-formed code.
+export function normalizeInviteCode(raw: string): string | null {
+  const code = raw.toUpperCase().replace(/[\s-]/g, "");
+  const valid = code.length === INVITE_CODE_LENGTH && [...code].every((c) => INVITE_CODE_ALPHABET.includes(c));
+  return valid ? code : null;
+}
+
+export function toGroupSummary(id: string, group: GroupDoc, viewerUid: string): GroupSummary {
+  return {
+    id,
+    name: group.name,
+    inviteCode: group.inviteCode,
+    members: group.members.map((userId) => ({
+      userId,
+      displayName: group.memberNames[userId] ?? "Member",
+      isMe: userId === viewerUid,
+    })),
+  };
 }
 
 // scores/{uid}. Readable by group members, so never put dollar amounts here.

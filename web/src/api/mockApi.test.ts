@@ -162,3 +162,38 @@ describe("groups", () => {
     expect(entries.map((e) => e.displayName)).toEqual(["Priya", "Riley"]);
   });
 });
+
+describe("watchMyGroups", () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("emits now, on every change, and stops after unsubscribe", async () => {
+    const { api, controls } = setup();
+    const seen: string[][] = [];
+    const stop = api.watchMyGroups((gs) => seen.push(gs.map((g) => `${g.name}:${g.members.length}`)), () => {});
+    await flush();
+    expect(seen).toEqual([["Demo Squad:5"]]);
+
+    const created = await api.createGroup("Roommates");
+    expect(controls.simulateJoin("delivery-spender")).toBe("Jordan joined Roommates");
+    expect(seen.at(-1)).toEqual(["Demo Squad:5", "Roommates:2"]);
+    expect(created.members).toHaveLength(1);
+
+    stop();
+    controls.simulateJoin("steady-saver");
+    expect(seen.at(-1)).toEqual(["Demo Squad:5", "Roommates:2"]);
+  });
+
+  it("reports simulated errors through onError", async () => {
+    const { api, controls } = setup();
+    controls.errors(1, ["watchMyGroups"]);
+    let error: unknown;
+    api.watchMyGroups(() => {}, (err) => (error = err));
+    await flush();
+    expect(error).toMatchObject({ code: "functions/unavailable" });
+  });
+
+  it("simulateJoin explains what went wrong", () => {
+    const { controls } = setup();
+    expect(() => controls.simulateJoin("steady-saver")).toThrow("Priya is already in Demo Squad.");
+  });
+});

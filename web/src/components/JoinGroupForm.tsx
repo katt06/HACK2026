@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { FirebaseError } from "firebase/app";
-import type { JoinGroupResponse } from "@contract";
+import { normalizeInviteCode, type JoinGroupResponse } from "@contract";
 import { api } from "../api";
-import { normalizeInviteCode } from "../lib/inviteCode";
 
 function friendlyError(err: unknown): string {
   const code = err instanceof FirebaseError ? err.code : "";

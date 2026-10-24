@@ -1,6 +1,6 @@
 import { httpsCallable } from "firebase/functions";
-import { addDoc, collection, getDocs, query, where } from "firebase/firestore";
-import type { CallableName, Callables, GroupDoc, GroupSummary } from "@contract";
+import { addDoc, collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import { toGroupSummary, type CallableName, type Callables, type GroupDoc } from "@contract";
 import { auth, db, functions } from "../firebase";
 import { generateInviteCode } from "../lib/inviteCode";
 import type { Api } from "./types";
@@ -19,18 +19,7 @@ function signedInUser() {
   return auth.currentUser;
 }
 
-function toGroupSummary(id: string, group: GroupDoc, viewerUid: string): GroupSummary {
-  return {
-    id,
-    name: group.name,
-    inviteCode: group.inviteCode,
-    members: group.members.map((userId) => ({
-      userId,
-      displayName: group.memberNames[userId] ?? "Member",
-      isMe: userId === viewerUid,
-    })),
-  };
-}
+const myGroupsQuery = (uid: string) => query(collection(db, "groups"), where("members", "array-contains", uid));
 
 export const realApi: Api = {
   getSafeToSave: () => call("getSafeToSave", {}),
@@ -42,8 +31,16 @@ export const realApi: Api = {
   // joining needs the Admin SDK, so it goes through a callable.
   async getMyGroups() {
     const { uid } = signedInUser();
-    const snap = await getDocs(query(collection(db, "groups"), where("members", "array-contains", uid)));
+    const snap = await getDocs(myGroupsQuery(uid));
     return snap.docs.map((d) => toGroupSummary(d.id, d.data() as GroupDoc, uid));
+  },
+  watchMyGroups(onChange, onError) {
+    const { uid } = signedInUser();
+    return onSnapshot(
+      myGroupsQuery(uid),
+      (snap) => onChange(snap.docs.map((d) => toGroupSummary(d.id, d.data() as GroupDoc, uid))),
+      onError,
+    );
   },
   async createGroup(name) {
     const user = signedInUser();
