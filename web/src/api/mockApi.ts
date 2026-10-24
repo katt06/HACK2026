@@ -231,6 +231,8 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
 
     getChallenges: () => respond("getChallenges", () => ({ challenges: mine().active })),
 
+    getMyScore: () => respond("getMyScore", () => mine().score),
+
     completeChallenge: (challengeId) =>
       respond("completeChallenge", (): CompleteChallengeResponse => {
         const s = mine();

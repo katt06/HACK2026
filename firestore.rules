@@ -84,6 +84,12 @@ service cloud.firestore {
         );
     }
 
+    // Your own score only, for now. Whether group members can read each other's
+    // scores (and how) is still being decided; until then the leaderboard goes through a callable.
+    match /scores/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

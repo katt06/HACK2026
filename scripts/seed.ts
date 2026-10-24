@@ -29,6 +29,9 @@ async function main() {
     memberNames: { alice: "Alice" },
     inviteCode: "SAVE24",
   });
+  // Score docs so the dashboard streak card has data. No dollar amounts, per the scores rule.
+  await db.doc("scores/alice").set({ userId: "alice", goalProgressPct: 0, streak: 3, improvementScore: 55, points: 140, level: 2 });
+  await db.doc("scores/bob").set({ userId: "bob", goalProgressPct: 0, streak: 1, improvementScore: 40, points: 60, level: 1 });
   console.log("Seeded users: alice@example.com, bob@example.com (password: password)");
   console.log("Seeded group: Alice's Savings Crew (invite code SAVE24)");
 }
