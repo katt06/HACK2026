@@ -1,1 +1,12 @@
 @import "tailwindcss";
+
+/* Scale everything up on very large screens (projector demos). */
+@media (min-width: 1536px) {
+  html {
+    font-size: 18px;
+  }
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}

@@ -13,13 +13,13 @@ export function safeToSaveStub(): GetSafeToSaveResponse {
   return {
     amount: 8401,
     explanation: [
-      "You have $1,240.00 in checking and get paid again on Friday, Oct 31.",
+      "You have $1,240.00 in checking and get paid again on Friday, Oct 30.",
       "Rent and Spotify ($910.99) are due before then, so we set that aside first.",
       "Based on your usual week, about $210.00 covers groceries, gas and a little fun.",
       "We keep a $35.00 cushion, which leaves $84.01 you can safely move to your goal.",
     ],
     explanationSource: "template",
-    nextPayday: "2026-10-31",
+    nextPayday: "2026-10-30",
     breakdown: {
       currentBalance: 124000,
       upcomingBillsTotal: 91099,
