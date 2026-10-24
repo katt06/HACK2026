@@ -32,6 +32,7 @@
 - banditStats/{uid_type_difficulty}: userId, challengeType, difficulty, attempts, completions
 - groups/{id}: name, members[], memberNames{uid: displayName}, inviteCode (6 chars, created client-side; joined only via the joinGroup callable)
 - scores/{uid}: userId, goalProgressPct, streak, improvementScore, points, level
+- scoreViewers/{uid} (server-only): uids[] of everyone who shares a group with uid; lets rules check score access
 
 ## Callable functions (contract)
 getSafeToSave, getChallenges, completeChallenge, getLeaderboard, joinGroup

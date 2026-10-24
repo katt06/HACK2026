@@ -17,6 +17,7 @@ initializeApp();
 export { joinGroup } from "./groups.js";
 export { refreshRecurring } from "./recurringJob.js";
 export { getSafeToSave } from "./safeToSave.js";
+export { syncScoreViewers } from "./scoreViewers.js";
 
 export const health = onCall((): HealthResponse => {
   return { ok: true, time: new Date().toISOString() };

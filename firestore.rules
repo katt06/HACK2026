@@ -1,7 +1,7 @@
 rules_version = '2';
 
-// Deny-by-default. Collections are opened up explicitly as features land.
-// transactions/ and recurring/ must stay server-only (Admin SDK bypasses rules).
+// Deny-by-default. Collections are opened up explicitly below; anything not matched is server-only.
+// Privacy is enforced here, not by hiding things in the UI (see CLAUDE.md).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -84,6 +84,49 @@ service cloud.firestore {
         );
     }
 
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Your own profile. baselineSpendByCategory feeds the leaderboard's improvement score,
+    // so only the server sets it; clients may create it empty and edit name and settings.
+    match /users/{uid} {
+      allow read: if isSelf(uid);
+      allow create: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['displayName', 'baselineSpendByCategory', 'settings'])
+        && request.resource.data.get('baselineSpendByCategory', {}) == {}
+        && validUserFields(request.resource.data);
+      allow update: if isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'settings'])
+        && validUserFields(request.resource.data);
+    }
+
+    function validUserFields(u) {
+      return u.displayName is string && u.displayName.size() > 0 && u.displayName.size() <= 50
+        && (!('settings' in u) || u.settings is map);
+    }
+
+    // Read-only for the owner. Challenges are created by getChallenges and change status
+    // only through completeChallenge, so points and bandit stats can't be faked.
+    match /challenges/{challengeId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Scores hold no dollar amounts and are written only by the server. Readable by the owner
+    // and by anyone who shares a group with them. Rules can't search groups, so the server keeps
+    // scoreViewers/{uid} (everyone who shares a group with uid) in sync from groups/*.
+    // Read scores one doc at a time; a collection query can't be checked this way.
+    match /scores/{uid} {
+      allow get: if isSelf(uid) || (signedIn() && sharesGroupWith(uid));
+    }
+
+    function sharesGroupWith(uid) {
+      let viewers = /databases/$(database)/documents/scoreViewers/$(uid);
+      return exists(viewers) && request.auth.uid in get(viewers).data.uids;
+    }
+
+    // Everything else is server-only: transactions, recurring, accounts, banditStats,
+    // scoreViewers, rateLimits. The Admin SDK bypasses these rules.
     match /{document=**} {
       allow read, write: if false;
     }

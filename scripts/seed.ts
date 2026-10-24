@@ -10,6 +10,7 @@ import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
 import type { TransactionDoc } from "../functions/src/contract.js";
 import { isIsoDate, todayIso } from "../functions/src/logic/dates.js";
 import { assignRecurring } from "../functions/src/logic/recurring.js";
+import { scoreViewersFor } from "../functions/src/logic/scoreViewers.js";
 import { generateSeedData, PASSWORD } from "./seedData.js";
 
 const PROJECT_ID = "demo-hack2026";
@@ -83,6 +84,9 @@ async function main() {
     user.contributions.forEach((c, i) => writes.push([goalRef.collection("entries").doc(`c${String(i).padStart(2, "0")}`), c]));
   }
   for (const [id, group] of Object.entries(data.groups)) writes.push([db.doc(`groups/${id}`), group]);
+  // syncScoreViewers does this when the functions emulator is running; write it here so it doesn't have to be.
+  const groups = Object.values(data.groups);
+  for (const user of data.users) writes.push([db.doc(`scoreViewers/${user.uid}`), { uids: scoreViewersFor(user.uid, groups) }]);
 
   await writeAll(writes);
 

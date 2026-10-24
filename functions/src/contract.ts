@@ -231,6 +231,12 @@ export interface ScoreDoc {
   level: number; // starts at 1
 }
 
+// scoreViewers/{uid} (server-only): everyone who shares at least one group with uid.
+// Kept in sync from groups/* so security rules can check score access with a single get().
+export interface ScoreViewersDoc {
+  uids: string[];
+}
+
 // ---------- Callables ----------
 
 export type EmptyRequest = Record<string, never>;
