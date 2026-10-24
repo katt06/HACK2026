@@ -27,7 +27,7 @@
 - goals/{id}/entries/{id}: kind (contribution | expense), amount, note, createdAt; contributions have verified (clients can only write false); expenses have choice (pause | lowerPace), weeksLater
 - accounts/{uid} (server-only): userId, currentBalance, asOf
 - transactions/{id} (server-only): userId, amount, category, merchant, date, recurringId
-- recurring/{id} (server-only): userId, merchant, amount, cadence, nextDue
+- recurring/{id} (server-only): userId, merchant, amount, cadence, nextDue, category, isPayday
 - challenges/{id}: userId, type, description, points, difficulty, status, completedAt, reason
 - banditStats/{uid_type_difficulty}: userId, challengeType, difficulty, attempts, completions
 - groups/{id}: name, members[], memberNames{uid: displayName}, inviteCode (6 chars, created client-side; joined only via the joinGroup callable)

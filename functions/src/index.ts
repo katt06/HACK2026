@@ -17,6 +17,7 @@ import { requireAuth, requireString } from "./validate.js";
 initializeApp();
 
 export { joinGroup } from "./groups.js";
+export { refreshRecurring } from "./recurringJob.js";
 
 export const health = onCall((): HealthResponse => {
   return { ok: true, time: new Date().toISOString() };

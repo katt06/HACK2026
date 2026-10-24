@@ -9,6 +9,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
 import type { TransactionDoc } from "../functions/src/contract.js";
 import { isIsoDate, todayIso } from "../functions/src/logic/dates.js";
+import { assignRecurring } from "../functions/src/logic/recurring.js";
 import { generateSeedData, PASSWORD } from "./seedData.js";
 
 const PROJECT_ID = "demo-hack2026";
@@ -67,11 +68,14 @@ async function main() {
     ]);
     writes.push([db.doc(`accounts/${user.uid}`), user.account]);
 
-    user.transactions.forEach((t, i) => {
-      // recurringId is filled in by recurring detection (A3).
-      const doc: TransactionDoc = { userId: user.uid, ...t, recurringId: null };
-      writes.push([db.doc(`transactions/${user.uid}-${String(i).padStart(4, "0")}`), doc]);
-    });
+    // Same detection the daily refreshRecurring job runs, so seeded data starts consistent.
+    const transactions = user.transactions.map((t, i) => ({ ...t, id: `${user.uid}-${String(i).padStart(4, "0")}` }));
+    const { recurring, recurringIdByTxId } = assignRecurring(user.uid, transactions, today);
+    for (const { id, ...t } of transactions) {
+      const doc: TransactionDoc = { userId: user.uid, ...t, recurringId: recurringIdByTxId[id] };
+      writes.push([db.doc(`transactions/${id}`), doc]);
+    }
+    for (const { id, ...doc } of recurring) writes.push([db.doc(`recurring/${id}`), doc]);
 
     const goalRef = db.doc(`goals/${user.uid}-goal`);
     writes.push([goalRef, user.goal]);

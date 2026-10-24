@@ -144,9 +144,11 @@ export interface AccountDoc {
 export interface RecurringDoc {
   userId: string;
   merchant: string;
-  amount: Cents;
+  amount: Cents; // typical amount, always positive; isPayday says which direction
   cadence: Cadence;
   nextDue: IsoDate;
+  category: Category;
+  isPayday: boolean; // recurring inflow
 }
 
 // challenges/{id}
