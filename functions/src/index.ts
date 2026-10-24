@@ -7,28 +7,22 @@ import type {
   GetChallengesResponse,
   GetLeaderboardRequest,
   GetLeaderboardResponse,
-  GetSafeToSaveRequest,
-  GetSafeToSaveResponse,
   HealthResponse,
 } from "./contract.js";
-import { challengesStub, completeChallengeStub, leaderboardStub, safeToSaveStub } from "./stubs.js";
+import { challengesStub, completeChallengeStub, leaderboardStub } from "./stubs.js";
 import { requireAuth, requireString } from "./validate.js";
 
 initializeApp();
 
 export { joinGroup } from "./groups.js";
 export { refreshRecurring } from "./recurringJob.js";
+export { getSafeToSave } from "./safeToSave.js";
 
 export const health = onCall((): HealthResponse => {
   return { ok: true, time: new Date().toISOString() };
 });
 
 // TODO: replace stubs with real logic. Response shapes are fixed by contract.ts.
-
-export const getSafeToSave = onCall<GetSafeToSaveRequest>((request): GetSafeToSaveResponse => {
-  requireAuth(request);
-  return safeToSaveStub();
-});
 
 export const getChallenges = onCall<GetChallengesRequest>((request): GetChallengesResponse => {
   const uid = requireAuth(request);

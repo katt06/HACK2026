@@ -11,7 +11,15 @@ export function toIsoDate(ms: number): IsoDate {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-export function todayIso(now: Date = new Date()): IsoDate {
+// Today's date in the given IANA timezone (UTC if missing or invalid).
+export function todayIso(now: Date = new Date(), timeZone?: string): IsoDate {
+  if (timeZone) {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    } catch {
+      // fall through to UTC
+    }
+  }
   return toIsoDate(now.getTime());
 }
 
@@ -36,6 +44,11 @@ export function daysBetween(from: IsoDate, to: IsoDate): number {
 // 0 = Sunday … 6 = Saturday
 export function dayOfWeek(date: IsoDate): number {
   return new Date(parseIsoDate(date)).getUTCDay();
+}
+
+// "Friday, Oct 30"
+export function formatDay(date: IsoDate): string {
+  return new Date(parseIsoDate(date)).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 export function isIsoDate(value: string): boolean {

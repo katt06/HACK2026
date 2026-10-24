@@ -13,6 +13,7 @@ import { assignRecurring } from "../functions/src/logic/recurring.js";
 import { generateSeedData, PASSWORD } from "./seedData.js";
 
 const PROJECT_ID = "demo-hack2026";
+const TIMEZONE = "America/New_York"; // every seed user's settings.timezone
 const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST;
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST;
 
@@ -48,7 +49,7 @@ async function writeAll(writes: [DocumentReference, object][]) {
 }
 
 async function main() {
-  const today = process.env.SEED_TODAY ?? todayIso();
+  const today = process.env.SEED_TODAY ?? todayIso(new Date(), TIMEZONE);
   if (!isIsoDate(today)) throw new Error(`SEED_TODAY must look like 2026-10-24, got ${today}`);
 
   const data = generateSeedData(today);
@@ -63,7 +64,7 @@ async function main() {
       {
         displayName: user.displayName,
         baselineSpendByCategory: user.baselineSpendByCategory,
-        settings: { notificationsEnabled: false, timezone: "America/New_York" },
+        settings: { notificationsEnabled: false, timezone: TIMEZONE },
       },
     ]);
     writes.push([db.doc(`accounts/${user.uid}`), user.account]);

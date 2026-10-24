@@ -76,7 +76,7 @@ export function seriesKey(t: Pick<TransactionLike, "merchant" | "amount">): stri
   return `${normalizeMerchant(t.merchant)}|${t.amount < 0 ? "in" : "out"}`;
 }
 
-function advance(date: IsoDate, cadence: Cadence): IsoDate {
+export function nextOccurrence(date: IsoDate, cadence: Cadence): IsoDate {
   return cadence === "monthly" ? addMonths(date, 1) : addDays(date, cadence === "weekly" ? 7 : 14);
 }
 
@@ -111,11 +111,11 @@ export function detectRecurring(transactions: TransactionLike[], asOf?: IsoDate)
     const [cadence, periodDays] = match;
 
     const last = sorted[sorted.length - 1];
-    let nextDue = advance(last.date, cadence);
+    let nextDue = nextOccurrence(last.date, cadence);
     const overdueDays = daysBetween(nextDue, today);
     if (overdueDays > periodDays) continue; // stopped
     if (overdueDays > GAP_TOLERANCE_DAYS) {
-      while (nextDue < today) nextDue = advance(nextDue, cadence); // skipped one; expect the next
+      while (nextDue < today) nextDue = nextOccurrence(nextDue, cadence); // skipped one; expect the next
     } else if (overdueDays > 0) {
       nextDue = today; // probably posting late; plan for it now
     }

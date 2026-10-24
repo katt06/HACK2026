@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { challengesStub, completeChallengeStub, leaderboardStub, safeToSaveStub } from "./stubs.js";
-
-describe("safeToSaveStub", () => {
-  it("amount matches the breakdown arithmetic", () => {
-    const { amount, breakdown: b } = safeToSaveStub();
-    const billsSum = b.upcomingBills.reduce((s, bill) => s + bill.amount, 0);
-    expect(b.upcomingBillsTotal).toBe(billsSum);
-    expect(amount).toBe(Math.max(0, b.currentBalance - b.upcomingBillsTotal - b.projectedSpending - b.safetyBuffer));
-  });
-});
+import { challengesStub, completeChallengeStub, leaderboardStub } from "./stubs.js";
 
 describe("challengesStub", () => {
   it("assigns challenges to the caller", () => {

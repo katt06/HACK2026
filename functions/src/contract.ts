@@ -244,10 +244,11 @@ export interface UpcomingBill {
   dueDate: IsoDate;
 }
 
-// amount = max(0, currentBalance - upcomingBillsTotal - projectedSpending - safetyBuffer)
+// amount = max(0, currentBalance + expectedIncome - upcomingBillsTotal - projectedSpending - safetyBuffer)
 export interface SafeToSaveBreakdown {
   currentBalance: Cents;
-  upcomingBillsTotal: Cents; // sum of upcomingBills, due before nextPayday
+  expectedIncome: Cents; // conservative income expected before nextPayday (irregular earners only; otherwise 0)
+  upcomingBillsTotal: Cents; // sum of upcomingBills, due on or before nextPayday
   upcomingBills: UpcomingBill[];
   projectedSpending: Cents; // forecast discretionary spend until nextPayday
   safetyBuffer: Cents;

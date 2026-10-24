@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, dayOfWeek, daysBetween, isIsoDate } from "./dates.js";
+import { addDays, addMonths, dayOfWeek, daysBetween, formatDay, isIsoDate, todayIso } from "./dates.js";
 import { hashString, mulberry32 } from "./random.js";
 
 describe("dates", () => {
@@ -18,6 +18,17 @@ describe("dates", () => {
     expect(daysBetween("2026-10-24", "2026-10-30")).toBe(6);
     expect(daysBetween("2026-10-30", "2026-10-24")).toBe(-6);
     expect(dayOfWeek("2026-10-24")).toBe(6); // Saturday
+  });
+
+  it("gets today in the user's timezone, falling back to UTC", () => {
+    const lateEvening = new Date("2026-10-25T02:30:00Z"); // 10:30pm Oct 24 in New York
+    expect(todayIso(lateEvening)).toBe("2026-10-25");
+    expect(todayIso(lateEvening, "America/New_York")).toBe("2026-10-24");
+    expect(todayIso(lateEvening, "Not/AZone")).toBe("2026-10-25");
+  });
+
+  it("formats a day for explanations", () => {
+    expect(formatDay("2026-10-30")).toBe("Friday, Oct 30");
   });
 
   it("validates ISO dates", () => {
