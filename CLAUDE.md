@@ -2,7 +2,7 @@
 
 ## Stack
 - Frontend: React + TypeScript + Vite, React Router, Tailwind. PWA-capable.
-- Backend: Firebase Auth, Firestore, Cloud Functions (2nd gen, TypeScript, Node 20), Hosting.
+- Backend: Firebase Auth, Firestore, Cloud Functions (2nd gen, TypeScript, Node 24), Hosting.
 - Local dev always runs against the Firebase Emulator Suite.
 
 ## Repo layout
