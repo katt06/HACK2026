@@ -4,34 +4,9 @@ import type {
   CompleteChallengeResponse,
   GetChallengesResponse,
   GetLeaderboardResponse,
-  GetSafeToSaveResponse,
   LeaderboardEntry,
   WithId,
 } from "./contract.js";
-
-export function safeToSaveStub(): GetSafeToSaveResponse {
-  return {
-    amount: 8401,
-    explanation: [
-      "You have $1,240.00 in checking and get paid again on Friday, Oct 30.",
-      "Rent and Spotify ($910.99) are due before then, so we set that aside first.",
-      "Based on your usual week, about $210.00 covers groceries, gas and a little fun.",
-      "We keep a $35.00 cushion, which leaves $84.01 you can safely move to your goal.",
-    ],
-    explanationSource: "template",
-    nextPayday: "2026-10-30",
-    breakdown: {
-      currentBalance: 124000,
-      upcomingBillsTotal: 91099,
-      upcomingBills: [
-        { merchant: "Maple Court Apartments", amount: 90000, dueDate: "2026-10-28" },
-        { merchant: "Spotify", amount: 1099, dueDate: "2026-10-29" },
-      ],
-      projectedSpending: 21000,
-      safetyBuffer: 3500,
-    },
-  };
-}
 
 const challenges: WithId<ChallengeDoc>[] = [
   {

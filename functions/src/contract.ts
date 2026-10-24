@@ -18,6 +18,7 @@ export type WithId<T> = T & { id: string };
 export const CATEGORIES = [
   "groceries",
   "dining",
+  "delivery",
   "coffee",
   "shopping",
   "entertainment",
@@ -29,6 +30,7 @@ export const CATEGORIES = [
   "utilities",
   "insurance",
   "medical",
+  "income",
   "other",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -131,13 +133,22 @@ export interface TransactionDoc {
   recurringId: string | null;
 }
 
+// accounts/{uid} (server-only): the checking balance the forecast starts from.
+export interface AccountDoc {
+  userId: string;
+  currentBalance: Cents;
+  asOf: IsoDate;
+}
+
 // recurring/{id} (server-only)
 export interface RecurringDoc {
   userId: string;
   merchant: string;
-  amount: Cents;
+  amount: Cents; // typical amount, always positive; isPayday says which direction
   cadence: Cadence;
   nextDue: IsoDate;
+  category: Category;
+  isPayday: boolean; // recurring inflow
 }
 
 // challenges/{id}
@@ -233,10 +244,11 @@ export interface UpcomingBill {
   dueDate: IsoDate;
 }
 
-// amount = max(0, currentBalance - upcomingBillsTotal - projectedSpending - safetyBuffer)
+// amount = max(0, currentBalance + expectedIncome - upcomingBillsTotal - projectedSpending - safetyBuffer)
 export interface SafeToSaveBreakdown {
   currentBalance: Cents;
-  upcomingBillsTotal: Cents; // sum of upcomingBills, due before nextPayday
+  expectedIncome: Cents; // conservative income expected before nextPayday (irregular earners only; otherwise 0)
+  upcomingBillsTotal: Cents; // sum of upcomingBills, due on or before nextPayday
   upcomingBills: UpcomingBill[];
   projectedSpending: Cents; // forecast discretionary spend until nextPayday
   safetyBuffer: Cents;

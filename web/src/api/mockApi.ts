@@ -221,6 +221,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           nextPayday: isoDate(payday),
           breakdown: {
             currentBalance: p.currentBalance,
+            expectedIncome: 0,
             upcomingBillsTotal,
             upcomingBills,
             projectedSpending: p.projectedSpending,
