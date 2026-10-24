@@ -5,13 +5,19 @@ import type {
   CompleteChallengeResponse,
   GetLeaderboardResponse,
   GetSafeToSaveResponse,
+  GroupDoc,
+  GroupSummary,
   IsoDate,
+  MAX_GROUP_MEMBERS,
   ScoreDoc,
   WithId,
 } from "@contract";
 import { formatCents } from "../lib/format";
-import { DEFAULT_PERSONA, MOCK_GROUP, PERSONAS, type ChallengeSeed, type Persona, type PersonaId } from "./mockData";
+import { generateInviteCode, normalizeInviteCode } from "../lib/inviteCode";
+import { DEFAULT_PERSONA, MOCK_GROUPS, PERSONAS, type ChallengeSeed, type Persona, type PersonaId } from "./mockData";
 import type { Api, ApiMethod } from "./types";
+
+const MAX_MEMBERS: typeof MAX_GROUP_MEMBERS = 20;
 
 export interface MockSettings {
   persona: PersonaId; // whose data "me" is
@@ -82,6 +88,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
   const [minDelay, maxDelay] = options.delayMs ?? [300, 800];
   const settings: MockSettings = { persona: DEFAULT_PERSONA, errorRate: 0, failOnly: [], ...options.settings };
   let state = initialState();
+  let groups = initialGroups();
 
   function initialState(): Map<PersonaId, PersonaState> {
     const createdAt = now().toISOString();
@@ -96,6 +103,34 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         },
       ]),
     );
+  }
+
+  function initialGroups(): Map<string, GroupDoc> {
+    return new Map(
+      MOCK_GROUPS.map((g) => [
+        g.id,
+        {
+          name: g.name,
+          inviteCode: g.inviteCode,
+          members: g.members.map(uidFor),
+          memberNames: Object.fromEntries(g.members.map((id) => [uidFor(id), PERSONAS.find((p) => p.id === id)!.displayName])),
+        },
+      ]),
+    );
+  }
+
+  function groupSummary(id: string): GroupSummary {
+    const g = groups.get(id)!;
+    return {
+      id,
+      name: g.name,
+      inviteCode: g.inviteCode,
+      members: g.members.map((userId) => ({
+        userId,
+        displayName: g.memberNames[userId] ?? "Member",
+        isMe: userId === uidFor(settings.persona),
+      })),
+    };
   }
 
   const persona = (): Persona => PERSONAS.find((p) => p.id === settings.persona)!;
@@ -186,12 +221,50 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
 
     getLeaderboard: (groupId) =>
       respond("getLeaderboard", (): GetLeaderboardResponse => {
-        const rows = PERSONAS.map((p) => ({ ...state.get(p.id)!.score, displayName: p.displayName, isMe: p.id === settings.persona }));
+        const group = groups.get(groupId) ?? groups.get(MOCK_GROUPS[0].id)!;
+        const rows = PERSONAS.filter((p) => group.members.includes(uidFor(p.id))).map((p) => ({ ...state.get(p.id)!.score, displayName: p.displayName, isMe: p.id === settings.persona }));
         rows.sort((a, b) => b.points - a.points);
         return {
-          group: { id: groupId, ...MOCK_GROUP },
+          group: { id: groupId, name: group.name, inviteCode: group.inviteCode },
           entries: rows.map((row, i) => ({ ...row, rank: i + 1 })),
         };
+      }),
+
+    getMyGroups: () =>
+      respond("getMyGroups", () => {
+        const me = uidFor(settings.persona);
+        return [...groups.keys()].filter((id) => groups.get(id)!.members.includes(me)).map(groupSummary);
+      }),
+
+    createGroup: (name) =>
+      respond("createGroup", () => {
+        const trimmed = name.trim();
+        if (trimmed.length < 1 || trimmed.length > 40) {
+          throw new FirebaseError("permission-denied", "Group names must be 1–40 characters.");
+        }
+        let inviteCode = generateInviteCode();
+        while ([...groups.values()].some((g) => g.inviteCode === inviteCode)) inviteCode = generateInviteCode();
+        const id = `mock-group-${groups.size + 1}`;
+        const me = uidFor(settings.persona);
+        groups.set(id, { name: trimmed, inviteCode, members: [me], memberNames: { [me]: persona().displayName } });
+        return groupSummary(id);
+      }),
+
+    joinGroup: (rawCode) =>
+      respond("joinGroup", () => {
+        const code = normalizeInviteCode(rawCode);
+        if (!code) throw new FirebaseError("functions/invalid-argument", "Invite codes are 6 letters and numbers.");
+        const id = [...groups.keys()].find((key) => groups.get(key)!.inviteCode === code);
+        if (!id) throw new FirebaseError("functions/not-found", "No group uses that invite code.");
+        const group = groups.get(id)!;
+        const me = uidFor(settings.persona);
+        const alreadyMember = group.members.includes(me);
+        if (!alreadyMember) {
+          if (group.members.length >= MAX_MEMBERS) throw new FirebaseError("functions/failed-precondition", "This group is full.");
+          group.members.push(me);
+          group.memberNames[me] = persona().displayName;
+        }
+        return { group: groupSummary(id), alreadyMember };
       }),
   };
 
@@ -214,6 +287,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
     },
     reset() {
       state = initialState();
+      groups = initialGroups();
     },
     status() {
       return { ...settings, personas: PERSONAS.map((p) => p.id) };

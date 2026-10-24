@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
-import { HttpsError, onCall, type CallableRequest } from "firebase-functions/v2/https";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import type {
   CompleteChallengeRequest,
   CompleteChallengeResponse,
@@ -12,20 +12,11 @@ import type {
   HealthResponse,
 } from "./contract.js";
 import { challengesStub, completeChallengeStub, leaderboardStub, safeToSaveStub } from "./stubs.js";
+import { requireAuth, requireString } from "./validate.js";
 
 initializeApp();
 
-export function requireAuth(request: CallableRequest<unknown>): string {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to continue.");
-  return request.auth.uid;
-}
-
-function requireString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new HttpsError("invalid-argument", `${field} is required.`);
-  }
-  return value;
-}
+export { joinGroup } from "./groups.js";
 
 export const health = onCall((): HealthResponse => {
   return { ok: true, time: new Date().toISOString() };

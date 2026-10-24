@@ -4,6 +4,27 @@ rules_version = '2';
 // transactions/ and recurring/ must stay server-only (Admin SDK bypasses rules).
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Members can read their groups. A client may only create a group whose sole
+    // member is itself; joining goes through the joinGroup callable, so clients
+    // never update members directly.
+    match /groups/{groupId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn() && validNewGroup(request.resource.data);
+    }
+
+    function validNewGroup(g) {
+      return g.keys().hasOnly(['name', 'members', 'memberNames', 'inviteCode'])
+        && g.name is string && g.name.size() > 0 && g.name.size() <= 40
+        && g.members == [request.auth.uid]
+        && g.memberNames.keys().hasOnly([request.auth.uid])
+        && g.memberNames[request.auth.uid] is string
+        && g.inviteCode.matches('^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$');
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -22,7 +22,17 @@ export interface Persona {
 
 export const DEFAULT_PERSONA: PersonaId = "demo-hero";
 
-export const MOCK_GROUP = { name: "Demo Squad", inviteCode: "DEMO42" };
+// Every persona is in the Demo Squad. The Side Hustle Crew leaves most personas out,
+// so joining with its code can be demoed in mock mode.
+export const MOCK_GROUPS: { id: string; name: string; inviteCode: string; members: PersonaId[] }[] = [
+  {
+    id: "demo-squad",
+    name: "Demo Squad",
+    inviteCode: "SQUAD7",
+    members: ["steady-saver", "irregular-income", "demo-hero", "delivery-spender", "subscription-creep"],
+  },
+  { id: "gig-crew", name: "Side Hustle Crew", inviteCode: "HUSTLE", members: ["irregular-income", "steady-saver"] },
+];
 
 export const POINTS = { easy: 30, medium: 50, hard: 80 } as const;
 

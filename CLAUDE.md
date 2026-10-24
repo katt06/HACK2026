@@ -27,11 +27,11 @@
 - recurring/{id} (server-only): userId, merchant, amount, cadence, nextDue
 - challenges/{id}: userId, type, description, points, difficulty, status, completedAt, reason
 - banditStats/{uid_type_difficulty}: userId, challengeType, difficulty, attempts, completions
-- groups/{id}: name, members[], inviteCode
+- groups/{id}: name, members[], memberNames{uid: displayName}, inviteCode (6 chars, created client-side; joined only via the joinGroup callable)
 - scores/{uid}: userId, goalProgressPct, streak, improvementScore, points, level
 
 ## Callable functions (contract)
-getSafeToSave, getChallenges, completeChallenge, getLeaderboard
+getSafeToSave, getChallenges, completeChallenge, getLeaderboard, joinGroup
 
 ## Conventions
 - Small, pure, unit-tested functions for the logic (forecast, scoring, recurring, bandit). Use Vitest.

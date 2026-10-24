@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import Demo from "./pages/Demo";
 import Goals from "./pages/Goals";
 import Group from "./pages/Group";
+import Join from "./pages/Join";
 import Leaderboard from "./pages/Leaderboard";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/challenges" element={<Challenges />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/group" element={<Group />} />
+          <Route path="/join/:code" element={<Join />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

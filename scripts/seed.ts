@@ -22,7 +22,15 @@ async function upsertUser(uid: string, email: string, displayName: string) {
 async function main() {
   await upsertUser("alice", "alice@example.com", "Alice");
   await upsertUser("bob", "bob@example.com", "Bob");
+  // Alice's group, which Bob isn't in yet, so you can demo joining with SAVE24.
+  await db.doc("groups/seed-alice-group").set({
+    name: "Alice's Savings Crew",
+    members: ["alice"],
+    memberNames: { alice: "Alice" },
+    inviteCode: "SAVE24",
+  });
   console.log("Seeded users: alice@example.com, bob@example.com (password: password)");
+  console.log("Seeded group: Alice's Savings Crew (invite code SAVE24)");
 }
 
 main().catch((err) => {

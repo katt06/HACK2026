@@ -121,3 +121,44 @@ describe("controls", () => {
     expect(saved).toMatchObject({ persona: "subscription-creep" });
   });
 });
+
+describe("groups", () => {
+  it("lists only groups the current persona is in, marking them as me", async () => {
+    const { api } = setup();
+    const groups = await api.getMyGroups();
+    expect(groups.map((g) => g.name)).toEqual(["Demo Squad"]);
+    expect(groups[0].members.filter((m) => m.isMe).map((m) => m.displayName)).toEqual(["Alex"]);
+  });
+
+  it("joins by code, ignoring case and dashes, and is idempotent", async () => {
+    const { api } = setup();
+    const first = await api.joinGroup("hus-tle");
+    expect(first.alreadyMember).toBe(false);
+    expect(first.group.members.map((m) => m.displayName)).toEqual(["Riley", "Priya", "Alex"]);
+    const again = await api.joinGroup("HUSTLE");
+    expect(again.alreadyMember).toBe(true);
+    expect(again.group.members).toHaveLength(3);
+    expect(await api.getMyGroups()).toHaveLength(2);
+  });
+
+  it("rejects unknown and malformed codes", async () => {
+    const { api } = setup();
+    await expect(api.joinGroup("ZZZZZZ")).rejects.toMatchObject({ code: "functions/not-found" });
+    await expect(api.joinGroup("NOPE")).rejects.toMatchObject({ code: "functions/invalid-argument" });
+  });
+
+  it("creates a group with just me and a valid invite code", async () => {
+    const { api } = setup();
+    const g = await api.createGroup("  Roommates  ");
+    expect(g.name).toBe("Roommates");
+    expect(g.inviteCode).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+    expect(g.members).toEqual([{ userId: "mock-demo-hero", displayName: "Alex", isMe: true }]);
+    await expect(api.createGroup("   ")).rejects.toBeDefined();
+  });
+
+  it("leaderboard only includes members of that group", async () => {
+    const { api } = setup();
+    const { entries } = await api.getLeaderboard("gig-crew");
+    expect(entries.map((e) => e.displayName)).toEqual(["Priya", "Riley"]);
+  });
+});

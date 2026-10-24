@@ -136,10 +136,29 @@ export interface BanditStatsDoc {
 }
 
 // groups/{id}
+// Invite codes skip look-alike characters (0/O, 1/I) so they're easy to read aloud.
+export const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const INVITE_CODE_LENGTH = 6;
+export const MAX_GROUP_MEMBERS = 20;
+
 export interface GroupDoc {
-  name: string;
+  name: string; // 1–40 chars
   members: string[]; // uids
+  memberNames: Record<string, string>; // uid → display name, so members never need to read users/{uid}
   inviteCode: string;
+}
+
+export interface GroupMember {
+  userId: string;
+  displayName: string;
+  isMe: boolean;
+}
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  inviteCode: string;
+  members: GroupMember[];
 }
 
 // scores/{uid}. Readable by group members, so never put dollar amounts here.
@@ -217,12 +236,23 @@ export interface GetLeaderboardResponse {
   entries: LeaderboardEntry[];
 }
 
+// joinGroup
+export interface JoinGroupRequest {
+  inviteCode: string; // case and spaces/dashes are ignored
+}
+
+export interface JoinGroupResponse {
+  group: GroupSummary;
+  alreadyMember: boolean;
+}
+
 // Name → request/response map, for a typed client helper.
 export interface Callables {
   getSafeToSave: { request: GetSafeToSaveRequest; response: GetSafeToSaveResponse };
   getChallenges: { request: GetChallengesRequest; response: GetChallengesResponse };
   completeChallenge: { request: CompleteChallengeRequest; response: CompleteChallengeResponse };
   getLeaderboard: { request: GetLeaderboardRequest; response: GetLeaderboardResponse };
+  joinGroup: { request: JoinGroupRequest; response: JoinGroupResponse };
 }
 export type CallableName = keyof Callables;
 
