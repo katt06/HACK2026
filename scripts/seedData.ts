@@ -1,20 +1,28 @@
 // Deterministic demo data: 6 months of transactions for 5 personas, plus balances, goals and groups.
 // Pure (no Firestore) so tests can import it. Same seed + same `today` → identical output.
-import type {
-  AccountDoc,
-  Category,
-  Cents,
-  ContributionEntry,
-  GoalDoc,
-  GroupDoc,
-  IsoDate,
+import {
+  CHALLENGE_TYPES,
+  type AccountDoc,
+  type Category,
+  type Cents,
+  type ChallengeDoc,
+  type ChallengeType,
+  type ContributionEntry,
+  type Difficulty,
+  type GoalDoc,
+  type GroupDoc,
+  type IsoDate,
+  type ScoreDoc,
 } from "../functions/src/contract.js";
 import { addDays, addMonths, dayOfWeek, daysBetween } from "../functions/src/logic/dates.js";
 import { hashString, mulberry32, type Rng } from "../functions/src/logic/random.js";
+import { zeroSafeToSaveDaysCounter } from "../functions/src/logic/safeToSaveHistory.js";
+import { blendedScore, computeScore, levelFor } from "../functions/src/logic/scoring.js";
 
 export const SEED = 2026;
 export const HISTORY_DAYS = 182; // ~6 months, ending today
 export const PASSWORD = "password";
+const SAVINGS_TRANSFER = "TRANSFER TO SAVINGS";
 
 export const PERSONA_IDS = [
   "delivery-spender",
@@ -42,6 +50,8 @@ export interface SeedUser {
   baselineSpendByCategory: Partial<Record<Category, Cents>>;
   goal: GoalDoc;
   contributions: ContributionEntry[]; // goals/{id}/entries, oldest first
+  completedChallenges: ChallengeDoc[]; // past challenges, which make up most of the points
+  score: ScoreDoc; // computed with the same scoring code the functions use
 }
 
 export interface SeedData {
@@ -315,12 +325,36 @@ function buildGoal(uid: PersonaId, spec: PersonaSpec["goal"], rng: Rng, today: I
   return { goal, contributions };
 }
 
+// Goal contributions leave checking as transfers, and whenever a paycheck lifts the balance above a cap,
+// the surplus is swept to savings too. Without this, balances rebuilt backward from today (A5's
+// safe-to-save history) go deeply negative, because most personas earn more than they spend.
+// The cap is set so the balance still ends at the persona's designed currentBalance.
+function addSavingsTransfers(l: Ledger, contributions: ContributionEntry[], endBalance: Cents): Cents {
+  for (const c of contributions) l.add(c.createdAt.slice(0, 10), SAVINGS_TRANSFER, "transfer", c.amount);
+  const flows = new Map<IsoDate, number>();
+  for (const t of l.transactions) flows.set(t.date, (flows.get(t.date) ?? 0) + t.amount);
+  const incomeDays = new Set(l.transactions.filter((t) => t.amount < 0).map((t) => t.date));
+  const lastIncome = [...incomeDays].sort().at(-1) ?? l.start;
+  const flowAfterLastIncome = l.transactions.filter((t) => t.date > lastIncome).reduce((s, t) => s + t.amount, 0);
+  const cap = endBalance + flowAfterLastIncome;
+
+  let balance = cap;
+  l.everyDay((date) => {
+    balance -= flows.get(date) ?? 0;
+    if (incomeDays.has(date) && balance > cap) {
+      l.add(date, SAVINGS_TRANSFER, "transfer", balance - cap);
+      balance = cap;
+    }
+  });
+  return balance;
+}
+
 // Typical monthly spend per category, from the oldest 3 months so recent changes show up against it.
 export function baselineFromHistory(transactions: SeedTransaction[], start: IsoDate): Partial<Record<Category, Cents>> {
   const windowDays = 91;
   const totals: Partial<Record<Category, Cents>> = {};
   for (const t of transactions) {
-    if (t.amount <= 0 || daysBetween(start, t.date) >= windowDays) continue;
+    if (t.amount <= 0 || t.category === "transfer" || daysBetween(start, t.date) >= windowDays) continue;
     totals[t.category] = (totals[t.category] ?? 0) + t.amount;
   }
   for (const category of Object.keys(totals) as Category[]) {
@@ -335,21 +369,135 @@ export function generateSeedUser(uid: PersonaId, today: IsoDate, seed = SEED): S
   const rng = mulberry32(seed ^ hashString(uid));
   const ledger = new Ledger(rng, today);
   spec.history(ledger);
+  const { goal, contributions } = buildGoal(uid, spec.goal, rng, today);
+  const currentBalance = Math.round(addSavingsTransfers(ledger, contributions, spec.currentBalance));
   const transactions = ledger.transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  return {
+  const user: Omit<SeedUser, "completedChallenges" | "score"> = {
     uid,
     email: spec.email,
     displayName: spec.displayName,
     story: spec.story,
     transactions,
-    account: { userId: uid, currentBalance: spec.currentBalance, asOf: today },
+    account: { userId: uid, currentBalance, asOf: today },
     baselineSpendByCategory: baselineFromHistory(transactions, ledger.start),
-    ...buildGoal(uid, spec.goal, rng, today),
+    goal,
+    contributions,
   };
+  // Scored without challenges here; generateSeedData plans the challenge history across all personas.
+  return { ...user, completedChallenges: [], score: scoreFor(user, today, []) };
+}
+
+// ---------- Points and the leaderboard demo ----------
+
+const POINTS_BY_DIFFICULTY: Record<Difficulty, number> = { easy: 30, medium: 50, hard: 80 };
+const COMPLETED_DESCRIPTIONS: Record<ChallengeType, string> = {
+  no_spend_day: "Have one no-spend day this week.",
+  cook_at_home: "Cook dinner at home three nights this week.",
+  brew_at_home: "Make coffee at home four mornings this week.",
+  category_cap: "Keep dining out under $40 this week.",
+  subscription_review: "Review your subscriptions and pause one you don't use.",
+  transit_swap: "Walk or take transit instead of driving twice this week.",
+};
+
+// Points from past challenges each persona should end up near (same as the web mock personas).
+const TARGET_POINTS: Record<PersonaId, number> = {
+  "delivery-spender": 240,
+  "irregular-income": 300,
+  "subscription-creep": 180,
+  "steady-saver": 620,
+  "demo-hero": 280,
+};
+
+// Splits a total into 30/50/80-point challenges (fewest challenges), or null if it can't be done.
+export function splitIntoChallenges(total: number): Difficulty[] | null {
+  for (let count = 0; count <= total / 30; count++) {
+    for (let hard = 0; hard <= count; hard++) {
+      for (let medium = 0; medium <= count - hard; medium++) {
+        const easy = count - hard - medium;
+        if (80 * hard + 50 * medium + 30 * easy === total) {
+          return [...Array(hard).fill("hard"), ...Array(medium).fill("medium"), ...Array(easy).fill("easy")];
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function completedChallenges(uid: PersonaId, difficulties: Difficulty[], today: IsoDate): ChallengeDoc[] {
+  return difficulties.map((difficulty, i) => {
+    const type = CHALLENGE_TYPES[(i + hashString(uid)) % CHALLENGE_TYPES.length];
+    const completedOn = addDays(today, -7 * (i + 1));
+    return {
+      userId: uid,
+      type,
+      description: COMPLETED_DESCRIPTIONS[type],
+      points: POINTS_BY_DIFFICULTY[difficulty],
+      difficulty,
+      status: "completed",
+      createdAt: `${addDays(completedOn, -3)}T13:00:00.000Z`,
+      completedAt: `${completedOn}T19:00:00.000Z`,
+      reason: "",
+    };
+  });
+}
+
+// Challenge points for each persona. Alex must sit just behind Riley on the blended leaderboard and
+// within 30 points of a new level, so completing one easy challenge on stage passes Riley and levels up.
+export function planChallengePoints(base: Record<PersonaId, ScoreDoc>): Record<PersonaId, number> {
+  const nearest = (target: number) => {
+    for (let delta = 0; delta <= 100; delta += 10) {
+      for (const total of [target + delta, target - delta]) if (total >= 0 && splitIntoChallenges(total)) return total;
+    }
+    return 0;
+  };
+  const plan = Object.fromEntries(
+    PERSONA_IDS.map((uid) => [uid, nearest(Math.round((TARGET_POINTS[uid] - base[uid].points) / 10) * 10)]),
+  ) as Record<PersonaId, number>;
+
+  const alex = base["demo-hero"];
+  const riley = base["irregular-income"];
+  let best: { alexPts: number; rileyPts: number; cost: number } | null = null;
+  for (let alexPts = 0; alexPts <= 1000; alexPts += 10) {
+    if (!splitIntoChallenges(alexPts)) continue;
+    const alexPoints = alex.points + alexPts;
+    if (levelFor(alexPoints + 30) === levelFor(alexPoints)) continue; // the easy challenge must level Alex up
+    for (let rileyPts = 0; rileyPts <= 1000; rileyPts += 10) {
+      if (!splitIntoChallenges(rileyPts)) continue;
+      const gap = blendedScore({ ...riley, points: riley.points + rileyPts }) - blendedScore({ ...alex, points: alexPoints });
+      if (gap <= 0 || gap >= 30) continue; // behind Riley now, ahead after +30
+      const cost = Math.abs(alexPts - plan["demo-hero"]) + Math.abs(rileyPts - plan["irregular-income"]);
+      if (!best || cost < best.cost) best = { alexPts, rileyPts, cost };
+    }
+  }
+  if (!best) throw new Error("Couldn't arrange the leaderboard demo with these seed scores.");
+  return { ...plan, "demo-hero": best.alexPts, "irregular-income": best.rileyPts };
+}
+
+function scoreFor(user: Omit<SeedUser, "completedChallenges" | "score">, today: IsoDate, challengePoints: number[]): ScoreDoc {
+  return computeScore({
+    userId: user.uid,
+    today,
+    goals: [{ goal: user.goal, entries: user.contributions }],
+    completedChallengePoints: challengePoints,
+    baselineSpendByCategory: user.baselineSpendByCategory,
+    transactions: user.transactions,
+    zeroSafeToSaveDays: zeroSafeToSaveDaysCounter({
+      today,
+      currentBalance: user.account.currentBalance,
+      balanceAsOf: user.account.asOf,
+      transactions: user.transactions,
+    }),
+  });
 }
 
 export function generateSeedData(today: IsoDate, seed = SEED): SeedData {
   const users = PERSONA_IDS.map((uid) => generateSeedUser(uid, today, seed));
+  const base = Object.fromEntries(users.map((u) => [u.uid, u.score])) as Record<PersonaId, ScoreDoc>;
+  const plan = planChallengePoints(base);
+  for (const user of users) {
+    user.completedChallenges = completedChallenges(user.uid, splitIntoChallenges(plan[user.uid])!, today);
+    user.score = scoreFor(user, today, user.completedChallenges.map((c) => c.points));
+  }
   const names = Object.fromEntries(users.map((u) => [u.uid, u.displayName]));
   const groupOf = (name: string, inviteCode: string, members: PersonaId[]): GroupDoc => ({
     name,

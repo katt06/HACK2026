@@ -7,11 +7,11 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9099";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
-import type { ScoreDoc, TransactionDoc } from "../functions/src/contract.js";
+import type { TransactionDoc } from "../functions/src/contract.js";
 import { isIsoDate, todayIso } from "../functions/src/logic/dates.js";
 import { assignRecurring } from "../functions/src/logic/recurring.js";
 import { scoreViewersFor } from "../functions/src/logic/scoreViewers.js";
-import { generateSeedData, PASSWORD, type PersonaId } from "./seedData.js";
+import { generateSeedData, PASSWORD } from "./seedData.js";
 
 const PROJECT_ID = "demo-hack2026";
 const TIMEZONE = "America/New_York"; // every seed user's settings.timezone
@@ -39,17 +39,6 @@ async function clearEmulators() {
     if (!res?.ok) throw new Error(`Couldn't clear ${url}. Are the emulators running? (npm run dev or firebase emulators:start)`);
   }
 }
-
-// Starting scores for the dashboard streak and leaderboard (same as the web mock personas).
-// Alex trails Riley by 20 points, so completing one easy challenge on stage moves Alex up.
-// goalProgressPct is filled in from each persona's seeded goal.
-const STARTING_SCORES: Record<PersonaId, Pick<ScoreDoc, "streak" | "improvementScore" | "points">> = {
-  "delivery-spender": { streak: 2, improvementScore: 44, points: 240 },
-  "irregular-income": { streak: 5, improvementScore: 61, points: 300 },
-  "subscription-creep": { streak: 1, improvementScore: 38, points: 180 },
-  "steady-saver": { streak: 12, improvementScore: 82, points: 620 },
-  "demo-hero": { streak: 4, improvementScore: 63, points: 280 },
-};
 
 // Firestore batches cap at 500 writes.
 async function writeAll(writes: [DocumentReference, object][]) {
@@ -94,14 +83,10 @@ async function main() {
     writes.push([goalRef, user.goal]);
     user.contributions.forEach((c, i) => writes.push([goalRef.collection("entries").doc(`c${String(i).padStart(2, "0")}`), c]));
 
-    const start = STARTING_SCORES[user.uid];
-    const score: ScoreDoc = {
-      userId: user.uid,
-      goalProgressPct: Math.min(100, Math.round((100 * user.goal.currentAmount) / user.goal.targetAmount)),
-      ...start,
-      level: Math.floor(start.points / 100) + 1,
-    };
-    writes.push([db.doc(`scores/${user.uid}`), score]);
+    user.completedChallenges.forEach((c, i) => writes.push([db.doc(`challenges/${user.uid}-done-${i}`), c]));
+    // Computed with the functions' scoring code; the seed plans challenge history so that Alex sits just
+    // behind Riley and one easy challenge on stage moves Alex ahead and up a level.
+    writes.push([db.doc(`scores/${user.uid}`), user.score]);
   }
   for (const [id, group] of Object.entries(data.groups)) writes.push([db.doc(`groups/${id}`), group]);
   // syncScoreViewers does this when the functions emulator is running; write it here so it doesn't have to be.
@@ -118,6 +103,8 @@ async function main() {
       transactions: u.transactions.length,
       balance: `$${(u.account.currentBalance / 100).toFixed(2)}`,
       goal: `${u.goal.name} ${Math.round((100 * u.goal.currentAmount) / u.goal.targetAmount)}%`,
+      streak: `${u.score.streak} wk`,
+      points: `${u.score.points} (L${u.score.level})`,
     })),
   );
   for (const [id, g] of Object.entries(data.groups)) console.log(`Group ${g.name} (${id}): invite code ${g.inviteCode}`);

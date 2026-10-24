@@ -3,8 +3,6 @@ import type {
   ChallengeDoc,
   CompleteChallengeResponse,
   GetChallengesResponse,
-  GetLeaderboardResponse,
-  LeaderboardEntry,
   WithId,
 } from "./contract.js";
 
@@ -72,21 +70,5 @@ export function completeChallengeStub(uid: string, challengeId: string): Complet
       level: 3,
     },
     leveledUp: 260 + challenge.points >= 300,
-  };
-}
-
-const leaderboardRows: Omit<LeaderboardEntry, "isMe">[] = [
-  { userId: "stub-user-maya", displayName: "Maya", rank: 1, goalProgressPct: 68, streak: 9, improvementScore: 81, points: 540, level: 5 },
-  { userId: "stub-user-me", displayName: "You", rank: 2, goalProgressPct: 42, streak: 4, improvementScore: 63, points: 260, level: 3 },
-  { userId: "stub-user-jordan", displayName: "Jordan", rank: 3, goalProgressPct: 35, streak: 2, improvementScore: 57, points: 190, level: 2 },
-  { userId: "stub-user-sam", displayName: "Sam", rank: 4, goalProgressPct: 12, streak: 0, improvementScore: 40, points: 70, level: 1 },
-];
-
-export function leaderboardStub(uid: string, groupId: string): GetLeaderboardResponse {
-  return {
-    group: { id: groupId, name: "Roommates Savings Squad", inviteCode: "SAVE42" },
-    entries: leaderboardRows.map((row) =>
-      row.userId === "stub-user-me" ? { ...row, userId: uid, isMe: true } : { ...row, isMe: false },
-    ),
   };
 }

@@ -214,12 +214,12 @@ function StreakCard() {
 
 function StreakBody({ score }: { score: ScoreDoc | null }) {
   if (!score || score.streak === 0) {
-    return <p className="text-slate-600">No streak yet. Finish a challenge today to start one.</p>;
+    return <p className="text-slate-600">No streak yet. Hit this week's savings target to start one.</p>;
   }
   return (
     <div>
       <p className="text-4xl font-bold lg:text-5xl">
-        <span aria-hidden>🔥</span> {score.streak} {score.streak === 1 ? "day" : "days"}
+        <span aria-hidden>🔥</span> {score.streak} {score.streak === 1 ? "week" : "weeks"}
       </p>
       <p className="mt-1 text-slate-500">
         Level {score.level} · {score.points} pts

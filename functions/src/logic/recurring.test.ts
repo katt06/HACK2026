@@ -19,6 +19,7 @@ describe("categorize", () => {
     ["METRO WATER & POWER", "utilities"],
     ["TRADER JOE'S #552", "groceries"],
     ["ACME CORP PAYROLL", "income"],
+    ["TRANSFER TO SAVINGS", "transfer"],
     ["SOME RANDOM SHOP", "other"],
   ])("%s → %s", (merchant, category) => {
     expect(categorize(merchant)).toBe(category);

@@ -5,7 +5,7 @@
 import type { Cents, GetSafeToSaveResponse, IsoDate, UpcomingBill } from "../contract.js";
 import { addDays, daysBetween, formatDay } from "./dates.js";
 import { formatCents } from "./money.js";
-import { detectRecurring, nextOccurrence, seriesKey, type RecurringSeries, type TransactionLike } from "./recurring.js";
+import { categorize, detectRecurring, nextOccurrence, seriesKey, type RecurringSeries, type TransactionLike } from "./recurring.js";
 import { median, percentile } from "./stats.js";
 
 export const VARIABLE_SPEND_WINDOW_DAYS = 60;
@@ -55,10 +55,11 @@ function planIncome(today: IsoDate, transactions: TransactionLike[], series: Rec
 }
 
 // Every occurrence of each recurring bill from its next due date through payday (a weekly bill can land twice).
+// Transfers to savings aren't bills: moving that money is what this forecast is deciding.
 function billsThrough(series: RecurringSeries[], today: IsoDate, nextPayday: IsoDate): UpcomingBill[] {
   const bills: UpcomingBill[] = [];
   for (const s of series) {
-    if (s.isPayday) continue;
+    if (s.isPayday || s.category === "transfer") continue;
     for (let due = s.nextDue; due <= nextPayday; due = nextOccurrence(due, s.cadence)) {
       if (due >= today) bills.push({ merchant: s.merchant, amount: s.amount, dueDate: due });
     }
@@ -66,7 +67,8 @@ function billsThrough(series: RecurringSeries[], today: IsoDate, nextPayday: Iso
   return bills.sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : a.merchant.localeCompare(b.merchant)));
 }
 
-// Average daily spend that isn't a recurring charge, over the last 60 days (or the whole history if shorter).
+// Average daily spend that isn't a recurring charge or a transfer to savings, over the last 60 days
+// (or the whole history if shorter).
 function averageDailyVariableSpend(today: IsoDate, transactions: TransactionLike[], series: RecurringSeries[]) {
   if (transactions.length === 0) return { perDay: 0, windowDays: 0 };
   const firstDate = transactions.reduce((earliest, t) => (t.date < earliest ? t.date : earliest), transactions[0].date);
@@ -74,7 +76,7 @@ function averageDailyVariableSpend(today: IsoDate, transactions: TransactionLike
   const from = addDays(today, -(windowDays - 1));
   const recurringKeys = new Set(series.map((s) => s.key));
   const total = transactions
-    .filter((t) => t.amount > 0 && t.date >= from && t.date <= today && !recurringKeys.has(seriesKey(t)))
+    .filter((t) => t.amount > 0 && t.date >= from && t.date <= today && !recurringKeys.has(seriesKey(t)) && categorize(t.merchant) !== "transfer")
     .reduce((sum, t) => sum + t.amount, 0);
   return { perDay: total / windowDays, windowDays };
 }

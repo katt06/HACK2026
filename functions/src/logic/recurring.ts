@@ -11,6 +11,7 @@ export type TransactionLike = Pick<TransactionDoc, "merchant" | "amount" | "date
 // and payouts must hit income before their platform names hit anything else.
 const RULES: [RegExp, Category][] = [
   [/payroll|direct dep|salary|payout|paycheck/, "income"],
+  [/transfer to savings|online transfer|xfer|to savings/, "transfer"],
   [/doordash|uber eats|ubereats|grubhub|postmates|seamless|caviar|gopuff/, "delivery"],
   [/netflix|spotify|hulu|disney|hbo|apple\.com|icloud|youtube premium|audible|adobe|planet fitness|peloton|patreon|dropbox|paramount|crunchyroll|new york times|nytimes/, "subscriptions"],
   [/coffee|starbucks|dunkin|peet'?s|blue bottle|philz|tim hortons|espresso|caf[eé]\b/, "coffee"],

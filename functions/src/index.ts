@@ -5,18 +5,18 @@ import type {
   CompleteChallengeResponse,
   GetChallengesRequest,
   GetChallengesResponse,
-  GetLeaderboardRequest,
-  GetLeaderboardResponse,
   HealthResponse,
 } from "./contract.js";
-import { challengesStub, completeChallengeStub, leaderboardStub } from "./stubs.js";
+import { challengesStub, completeChallengeStub } from "./stubs.js";
 import { requireAuth, requireString } from "./validate.js";
 
 initializeApp();
 
 export { joinGroup } from "./groups.js";
 export { refreshRecurring } from "./recurringJob.js";
+export { getLeaderboard } from "./leaderboard.js";
 export { getSafeToSave } from "./safeToSave.js";
+export { onChallengeWritten, onGoalEntryWritten, onGoalWritten, refreshScores } from "./scoreStore.js";
 export { syncScoreViewers } from "./scoreViewers.js";
 
 export const health = onCall((): HealthResponse => {
@@ -36,10 +36,4 @@ export const completeChallenge = onCall<CompleteChallengeRequest>((request): Com
   const result = completeChallengeStub(uid, challengeId);
   if (!result) throw new HttpsError("not-found", "Challenge not found.");
   return result;
-});
-
-export const getLeaderboard = onCall<GetLeaderboardRequest>((request): GetLeaderboardResponse => {
-  const uid = requireAuth(request);
-  const groupId = requireString(request.data?.groupId, "groupId");
-  return leaderboardStub(uid, groupId);
 });

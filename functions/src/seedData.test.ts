@@ -1,7 +1,9 @@
 // Checks that the demo data generator in /scripts tells each persona's story.
 // Lives here so it runs with `npm test`; later logic tests import the same seed users.
 import { describe, expect, it } from "vitest";
-import { generateSeedData, generateSeedUser, HISTORY_DAYS, PERSONA_IDS } from "../../scripts/seedData.js";
+import { generateSeedData, generateSeedUser, HISTORY_DAYS, PERSONA_IDS, splitIntoChallenges } from "../../scripts/seedData.js";
+import { balanceOn } from "./logic/safeToSaveHistory.js";
+import { blendedScore, levelFor, rankLeaderboard } from "./logic/scoring.js";
 import { addDays, dayOfWeek, daysBetween } from "./logic/dates.js";
 
 const TODAY = "2026-10-24";
@@ -96,5 +98,66 @@ describe("persona stories", () => {
     expect(lastPay).toBe(addDays(TODAY, -8)); // next payday is today + 6
     const rentDay = Number(byMerchant("demo-hero", "ELM STREET APARTMENTS").at(-1)!.date.slice(8));
     expect(rentDay).toBe(Number(addDays(TODAY, 4).slice(8)));
+  });
+});
+
+describe("balances and transfers", () => {
+  it("mirrors each goal contribution as a transfer out of checking", () => {
+    for (const u of data.users) {
+      const transfers = new Set(u.transactions.filter((t) => t.category === "transfer").map((t) => `${t.date}:${t.amount}`));
+      expect(u.contributions.every((c) => transfers.has(`${c.createdAt.slice(0, 10)}:${c.amount}`))).toBe(true);
+    }
+  });
+
+  it("never lets the rebuilt balance go negative, so past safe-to-save is realistic", () => {
+    for (const u of data.users) {
+      const input = { today: TODAY, currentBalance: u.account.currentBalance, balanceAsOf: TODAY, transactions: u.transactions };
+      for (let d = 0; d < HISTORY_DAYS - 1; d++) expect(balanceOn(addDays(TODAY, -d), input)).toBeGreaterThanOrEqual(0);
+    }
+    expect(user("demo-hero").account.currentBalance).toBe(124000); // still the designed demo balance
+  });
+});
+
+describe("scores and the leaderboard demo", () => {
+  it("gives each persona its designed weekly streak", () => {
+    expect(Object.fromEntries(data.users.map((u) => [u.uid, u.score.streak]))).toEqual({
+      "delivery-spender": 2,
+      "irregular-income": 5,
+      "subscription-creep": 1,
+      "steady-saver": 12,
+      "demo-hero": 4,
+    });
+  });
+
+  it("matches each score's points to its completed challenges plus progress", () => {
+    for (const u of data.users) {
+      expect(u.completedChallenges.every((c) => c.status === "completed" && c.userId === u.uid)).toBe(true);
+      expect(u.score.points).toBeGreaterThanOrEqual(u.completedChallenges.reduce((s, c) => s + c.points, 0));
+      expect(u.score.level).toBe(levelFor(u.score.points));
+    }
+  });
+
+  it("puts Alex just behind Riley, and one easy challenge moves Alex ahead and up a level", () => {
+    const rows = data.users.map((u) => ({ ...u.score, displayName: u.displayName }));
+    const before = rankLeaderboard(rows, "demo-hero");
+    const rank = (entries: typeof before, uid: string) => entries.find((e) => e.userId === uid)!.rank;
+    expect(before[0].userId).toBe("steady-saver");
+    expect(rank(before, "demo-hero")).toBe(rank(before, "irregular-income") + 1);
+
+    const alex = user("demo-hero").score;
+    const after = rankLeaderboard(
+      rows.map((r) => (r.userId === "demo-hero" ? { ...r, points: r.points + 30, level: levelFor(r.points + 30) } : r)),
+      "demo-hero",
+    );
+    expect(rank(after, "demo-hero")).toBe(rank(after, "irregular-income") - 1);
+    expect(levelFor(alex.points + 30)).toBe(alex.level + 1);
+    expect(blendedScore(alex)).toBeLessThan(blendedScore(user("irregular-income").score));
+  });
+
+  it("splits challenge points into 30/50/80 pieces", () => {
+    expect(splitIntoChallenges(0)).toEqual([]);
+    expect(splitIntoChallenges(160)).toEqual(["hard", "hard"]);
+    expect(splitIntoChallenges(110)).toEqual(["hard", "easy"]);
+    expect(splitIntoChallenges(40)).toBeNull();
   });
 });

@@ -31,6 +31,7 @@ export const CATEGORIES = [
   "insurance",
   "medical",
   "income",
+  "transfer", // money moved to the user's own savings; never counted as spending
   "other",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -225,8 +226,11 @@ export function toGroupSummary(id: string, group: GroupDoc, viewerUid: string): 
 export interface ScoreDoc {
   userId: string;
   goalProgressPct: number; // 0–100
-  streak: number; // consecutive days with a completed challenge
-  improvementScore: number; // 0–100, spending vs. baseline
+  // Consecutive weeks (Mon–Sun) where goal contributions met that week's target: the sum over active goals
+  // of (target - saved) / weeks to deadline, frozen at week start. Weeks with no active goals, or a missed
+  // week where safe-to-save was $0 on more than 4 days, pause the streak instead of breaking it.
+  streak: number;
+  improvementScore: number; // 0–100: % drop in discretionary spend (last 30 days) vs. baseline
   points: number;
   level: number; // starts at 1
 }
@@ -294,7 +298,7 @@ export interface GetLeaderboardRequest {
 
 export interface LeaderboardEntry extends ScoreDoc {
   displayName: string;
-  rank: number; // 1-based, ordered by points desc
+  rank: number; // 1-based, ordered by blended score (points + improvementScore + 10 × streak) desc
   isMe: boolean;
 }
 

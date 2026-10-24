@@ -64,6 +64,15 @@ describe("forecastSafeToSave, worked example", () => {
 });
 
 describe("forecastSafeToSave, edge cases", () => {
+  it("doesn't count transfers to savings as spending or as bills", () => {
+    const base = [...every("2026-09-04", 14, 4, "ACME PAYROLL", -200000), ...every("2026-08-26", 1, 60, "CORNER DELI", 2000)];
+    const withTransfers = [...base, ...every("2026-09-05", 7, 8, "TRANSFER TO SAVINGS", 10000)]; // weekly, due again Oct 31
+    const plain = forecastSafeToSave({ today: TODAY, currentBalance: 150000, transactions: base });
+    const f = forecastSafeToSave({ today: TODAY, currentBalance: 150000, transactions: withTransfers });
+    expect(f.breakdown.projectedSpending).toBe(plain.breakdown.projectedSpending);
+    expect(f.breakdown.upcomingBills).toEqual([]);
+  });
+
   it("uses the $50 minimum buffer when bills are small", () => {
     const transactions = [...every("2026-09-04", 14, 4, "ACME PAYROLL", -200000), ...every("2026-08-26", 1, 60, "CORNER DELI", 1000)];
     expect(forecastSafeToSave({ today: TODAY, currentBalance: 100000, transactions }).breakdown.safetyBuffer).toBe(5000);
