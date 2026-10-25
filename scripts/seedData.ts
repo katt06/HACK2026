@@ -4,6 +4,7 @@ import {
   CHALLENGE_POINTS,
   CHALLENGE_TYPES,
   type AccountDoc,
+  type AutoSaveRule,
   type Category,
   type Cents,
   type ChallengeDoc,
@@ -14,11 +15,14 @@ import {
   type GroupDoc,
   type IsoDate,
   type ScoreDoc,
+  type SquadContributionDoc,
+  type SquadGoalDoc,
 } from "../functions/src/contract.js";
 import { addDays, addMonths, dayOfWeek, daysBetween } from "../functions/src/logic/dates.js";
 import { hashString, mulberry32, type Rng } from "../functions/src/logic/random.js";
 import { zeroSafeToSaveDaysCounter } from "../functions/src/logic/safeToSaveHistory.js";
-import { blendedScore, computeScore, levelFor } from "../functions/src/logic/scoring.js";
+import { blendedScore, computeScore, levelFor, startOfWeek, type GoalWithEntries } from "../functions/src/logic/scoring.js";
+import { squadBonusPoints, squadShareGoal } from "../functions/src/logic/squad.js";
 
 export const SEED = 2026;
 export const HISTORY_DAYS = 182; // ~6 months, ending today
@@ -53,12 +57,19 @@ export interface SeedUser {
   contributions: ContributionEntry[]; // goals/{id}/entries, oldest first
   completedChallenges: ChallengeDoc[]; // past challenges, which make up most of the points
   score: ScoreDoc; // computed with the same scoring code the functions use
+  squadContributions: SquadContributionDoc[]; // to the Demo Squad's goal
+}
+
+export interface SeedSquad {
+  squad: SquadGoalDoc;
+  contributions: SquadContributionDoc[];
 }
 
 export interface SeedData {
   today: IsoDate;
   users: SeedUser[];
   groups: Record<string, GroupDoc>; // id → group
+  squadGoals: Record<string, SeedSquad>; // group id → its squad goal
 }
 
 // ---------- Ledger: a tiny DSL for writing persona histories ----------
@@ -154,7 +165,8 @@ interface PersonaSpec {
   displayName: string;
   story: string;
   currentBalance: Cents;
-  goal: { name: string; weekly: Cents; streak: number; olderChance: number; progressPct: number };
+  goal: { name: string; weekly: Cents; streak: number; olderChance: number; progressPct: number; autoSave?: AutoSaveRule };
+  squadContribution?: Cents; // chipped into the Demo Squad's "Cabin trip" this week
   history(l: Ledger): void;
 }
 
@@ -166,6 +178,7 @@ const PERSONAS: Record<PersonaId, PersonaSpec> = {
     story: "Delivery spender",
     currentBalance: 185000,
     goal: { name: "Emergency fund", weekly: 2500, streak: 2, olderChance: 0.4, progressPct: 31 },
+    squadContribution: 15000,
     history(l) {
       l.biweeklyPay("ACME CORP PAYROLL", 210000, addDays(l.today, 7));
       l.bill("MAPLE COURT APARTMENTS", "rent", 110000, 1);
@@ -191,6 +204,7 @@ const PERSONAS: Record<PersonaId, PersonaSpec> = {
     story: "Irregular income",
     currentBalance: 230000,
     goal: { name: "New laptop", weekly: 3000, streak: 5, olderChance: 0.5, progressPct: 48 },
+    squadContribution: 20000,
     history(l) {
       for (let d = addDays(l.start, Math.floor(l.between(0, 4))); d <= l.today; d = addDays(d, 3 + Math.floor(l.between(0, 6)))) {
         l.add(d, "UBER DRIVER PAYOUT", "income", -l.between(8000, 35000));
@@ -219,6 +233,7 @@ const PERSONAS: Record<PersonaId, PersonaSpec> = {
     story: "Subscription creep",
     currentBalance: 148000,
     goal: { name: "Concert trip", weekly: 1500, streak: 1, olderChance: 0.35, progressPct: 22 },
+    squadContribution: 10000,
     history(l) {
       l.monthly(28, (date) => l.add(date, "NORTHWIND PAYROLL", "income", -l.jitter(380000, 0.02)));
       l.bill("RIVERSIDE APARTMENTS", "rent", 125000, 1);
@@ -253,6 +268,7 @@ const PERSONAS: Record<PersonaId, PersonaSpec> = {
     story: "Steady saver",
     currentBalance: 340000,
     goal: { name: "House down payment", weekly: 7500, streak: 12, olderChance: 0.9, progressPct: 74 },
+    squadContribution: 30000,
     history(l) {
       l.biweeklyPay("GLOBEX PAYROLL", 260000, addDays(l.today, 3));
       l.bill("PARKVIEW LOFTS", "rent", 140000, 1);
@@ -275,7 +291,8 @@ const PERSONAS: Record<PersonaId, PersonaSpec> = {
     displayName: "Alex",
     story: "Demo hero",
     currentBalance: 124000,
-    goal: { name: "Spring break trip", weekly: 4000, streak: 4, olderChance: 0.6, progressPct: 42 },
+    // Auto-saves 10% of the balance each payday, so `npm run payday -- demo-hero` can show it on stage.
+    goal: { name: "Spring break trip", weekly: 4000, streak: 4, olderChance: 0.6, progressPct: 42, autoSave: { kind: "percentOfBalance", percent: 10 } },
     history(l) {
       l.biweeklyPay("INITECH PAYROLL", 190000, addDays(l.today, 6));
       l.bill("ELM STREET APARTMENTS", "rent", 90000, dayOfMonth(addDays(l.today, 4)));
@@ -321,6 +338,7 @@ function buildGoal(uid: PersonaId, spec: PersonaSpec["goal"], rng: Rng, today: I
     verified: false,
     sizingRecommendation: null,
     pausedUntil: null,
+    ...(spec.autoSave ? { autoSave: spec.autoSave, autoSaveLastRunOn: null } : {}),
     createdAt: `${addDays(today, -(7 * 26))}T15:00:00.000Z`,
   };
   return { goal, contributions };
@@ -330,7 +348,7 @@ function buildGoal(uid: PersonaId, spec: PersonaSpec["goal"], rng: Rng, today: I
 // the surplus is swept to savings too. Without this, balances rebuilt backward from today (A5's
 // safe-to-save history) go deeply negative, because most personas earn more than they spend.
 // The cap is set so the balance still ends at the persona's designed currentBalance.
-function addSavingsTransfers(l: Ledger, contributions: ContributionEntry[], endBalance: Cents): Cents {
+function addSavingsTransfers(l: Ledger, contributions: { amount: Cents; createdAt: string }[], endBalance: Cents): Cents {
   for (const c of contributions) l.add(c.createdAt.slice(0, 10), SAVINGS_TRANSFER, "transfer", c.amount);
   const flows = new Map<IsoDate, number>();
   for (const t of l.transactions) flows.set(t.date, (flows.get(t.date) ?? 0) + t.amount);
@@ -371,9 +389,14 @@ export function generateSeedUser(uid: PersonaId, today: IsoDate, seed = SEED): S
   const ledger = new Ledger(rng, today);
   spec.history(ledger);
   const { goal, contributions } = buildGoal(uid, spec.goal, rng, today);
-  const currentBalance = Math.round(addSavingsTransfers(ledger, contributions, spec.currentBalance));
+  // Squad contributions land the day after the squad goal was created (this Monday), or today if that's sooner.
+  const squadDay = [addDays(startOfWeek(today), 1), today].sort()[0];
+  const squadContributions: SquadContributionDoc[] = spec.squadContribution
+    ? [{ userId: uid, amount: spec.squadContribution, createdAt: `${squadDay}T14:00:00.000Z` }]
+    : [];
+  const currentBalance = Math.round(addSavingsTransfers(ledger, [...contributions, ...squadContributions], spec.currentBalance));
   const transactions = ledger.transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const user: Omit<SeedUser, "completedChallenges" | "score"> = {
+  const user: Omit<SeedUser, "completedChallenges" | "score" | "squadContributions"> = {
     uid,
     email: spec.email,
     displayName: spec.displayName,
@@ -384,8 +407,8 @@ export function generateSeedUser(uid: PersonaId, today: IsoDate, seed = SEED): S
     goal,
     contributions,
   };
-  // Scored without challenges here; generateSeedData plans the challenge history across all personas.
-  return { ...user, completedChallenges: [], score: scoreFor(user, today, []) };
+  // Scored without challenges or squads here; generateSeedData adds both across all personas.
+  return { ...user, completedChallenges: [], score: scoreFor(user, today, []), squadContributions };
 }
 
 // ---------- Points and the leaderboard demo ----------
@@ -473,7 +496,14 @@ export function planChallengePoints(base: Record<PersonaId, ScoreDoc>): Record<P
   return { ...plan, "demo-hero": best.alexPts, "irregular-income": best.rileyPts };
 }
 
-function scoreFor(user: Omit<SeedUser, "completedChallenges" | "score">, today: IsoDate, challengePoints: number[]): ScoreDoc {
+type SquadView = { squad: SquadGoalDoc; members: number; mine: SquadContributionDoc[] };
+
+function scoreFor(
+  user: Omit<SeedUser, "completedChallenges" | "score" | "squadContributions">,
+  today: IsoDate,
+  challengePoints: number[],
+  squads: SquadView[] = [],
+): ScoreDoc {
   return computeScore({
     userId: user.uid,
     today,
@@ -487,16 +517,35 @@ function scoreFor(user: Omit<SeedUser, "completedChallenges" | "score">, today: 
       balanceAsOf: user.account.asOf,
       transactions: user.transactions,
     }),
+    squadShares: squads.map((s) => squadShareGoal(s.squad, s.members, s.mine)).filter((g): g is GoalWithEntries => g !== null),
+    squadBonusPoints: squadBonusPoints(squads.map((s) => s.squad)),
   });
 }
 
 export function generateSeedData(today: IsoDate, seed = SEED): SeedData {
   const users = PERSONA_IDS.map((uid) => generateSeedUser(uid, today, seed));
-  const base = Object.fromEntries(users.map((u) => [u.uid, u.score])) as Record<PersonaId, ScoreDoc>;
+
+  // The Demo Squad saves for a cabin trip together. Everyone but Alex has chipped in (37%, past the 25%
+  // milestone), so on stage one contribution from Alex can push it past 50% and give everyone a bonus.
+  const contributions = users.flatMap((u) => u.squadContributions);
+  const cabinTrip: SquadGoalDoc = {
+    groupId: "demo-group",
+    name: "Cabin trip",
+    targetAmount: 200000,
+    currentAmount: contributions.reduce((s, c) => s + c.amount, 0),
+    deadline: addDays(today, 7 * 16),
+    createdBy: "steady-saver",
+    createdAt: `${startOfWeek(today)}T09:00:00.000Z`,
+    completedAt: null,
+  };
+  const squadFor = (u: SeedUser): SquadView[] => [{ squad: cabinTrip, members: PERSONA_IDS.length, mine: u.squadContributions }];
+
+  // Squad bonuses are part of the base the leaderboard demo is planned around.
+  const base = Object.fromEntries(users.map((u) => [u.uid, scoreFor(u, today, [], squadFor(u))])) as Record<PersonaId, ScoreDoc>;
   const plan = planChallengePoints(base);
   for (const user of users) {
     user.completedChallenges = completedChallenges(user.uid, splitIntoChallenges(plan[user.uid])!, today);
-    user.score = scoreFor(user, today, user.completedChallenges.map((c) => c.points));
+    user.score = scoreFor(user, today, user.completedChallenges.map((c) => c.points), squadFor(user));
   }
   const names = Object.fromEntries(users.map((u) => [u.uid, u.displayName]));
   const groupOf = (name: string, inviteCode: string, members: PersonaId[]): GroupDoc => ({
@@ -514,5 +563,6 @@ export function generateSeedData(today: IsoDate, seed = SEED): SeedData {
       // Alex isn't a member, so joining with HUSTLE can be demoed.
       "side-hustle": groupOf("Side Hustle Crew", "HUSTLE", ["irregular-income", "steady-saver"]),
     },
+    squadGoals: { "demo-group": { squad: cabinTrip, contributions } },
   };
 }

@@ -52,14 +52,14 @@ describe("forecastSafeToSave, worked example", () => {
       "You have $1,500.00 in checking and get paid again on Friday, Oct 30.",
       "Maple Court Apartments ($1,000.00) is due before then, so we set that aside first.",
       "Based on your last two months, about $120.00 covers everyday spending until then.",
-      "We keep a $100.00 cushion, which leaves $280.00 you can safely move to your goal.",
+      "After a $100.00 cushion, you have $280.00 in remaining money you could move to your goal.",
     ]);
   });
 
   it("floors at zero and says so kindly", () => {
     const broke = forecastSafeToSave({ today: TODAY, currentBalance: 50000, transactions });
     expect(broke.amount).toBe(0);
-    expect(broke.explanation.at(-1)).toBe("After a $100.00 cushion there's nothing extra this time, and that's okay.");
+    expect(broke.explanation.at(-1)).toBe("After a $100.00 cushion there's no remaining money this time, and that's okay.");
   });
 });
 

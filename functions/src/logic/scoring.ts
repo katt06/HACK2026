@@ -172,12 +172,17 @@ export interface ScoreInput {
   baselineSpendByCategory: Partial<Record<Category, Cents>>;
   transactions: (TransactionLike & { category: Category })[];
   zeroSafeToSaveDays?: (weekStart: IsoDate) => number;
+  // Squad goals: the user's fair share of each (logic/squad.ts squadShareGoal) counts toward the weekly
+  // streak only; milestone bonuses go straight to points. Progress % and progress points stay personal.
+  squadShares?: GoalWithEntries[];
+  squadBonusPoints?: number;
   previousBadges?: readonly BadgeId[]; // from the existing score doc, so badges stay earned
 }
 
 export function computeScore(input: ScoreInput): ScoreDoc {
-  const points = input.completedChallengePoints.reduce((s, p) => s + p, 0) + progressPoints(input.goals);
-  const streak = weeklyStreak(input.goals, input.today, input.zeroSafeToSaveDays);
+  const points =
+    input.completedChallengePoints.reduce((s, p) => s + p, 0) + progressPoints(input.goals) + (input.squadBonusPoints ?? 0);
+  const streak = weeklyStreak([...input.goals, ...(input.squadShares ?? [])], input.today, input.zeroSafeToSaveDays);
   const badges = evaluateBadges(
     { goalsCreated: input.goals.length, streak, challengesCompleted: input.completedChallengePoints.length },
     input.previousBadges,

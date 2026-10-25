@@ -1,7 +1,13 @@
-// "Safe to save": how much can move to a goal now without coming up short before the next payday.
+// "Remaining money" (the getSafeToSave callable): what's left before the next payday after bills, everyday
+// spending, and a cushion, so it can move to a goal without coming up short.
 // Pure function over a balance and transaction history; the callable just loads the data.
 //
 // safeToSave = currentBalance + expectedIncome − upcomingBills − projectedSpending − buffer, floored at 0
+//
+// projectedSpending is the larger of A4's average (avg daily spend × days) and a "heavier-than-usual
+// stretch": the 80th percentile of past same-length windows. Backtesting the seed personas, the average
+// alone kept balances above $0 after moving the suggested amount 74% of the time; this got 93%, while
+// suggesting only ~6% less (see logic/trackRecord.ts).
 import type { Cents, GetSafeToSaveResponse, IsoDate, UpcomingBill } from "../contract.js";
 import { addDays, daysBetween, formatDay } from "./dates.js";
 import { formatCents } from "./money.js";
@@ -9,6 +15,8 @@ import { categorize, detectRecurring, nextOccurrence, seriesKey, type RecurringS
 import { median, percentile } from "./stats.js";
 
 export const VARIABLE_SPEND_WINDOW_DAYS = 60;
+export const HEAVY_STRETCH_PERCENTILE = 0.8;
+const HEAVY_STRETCH_LOOKBACK_DAYS = 90;
 export const MIN_BUFFER: Cents = 5000;
 export const BUFFER_SHARE_OF_BILLS = 0.1;
 // Irregular income: plan two weeks at a time and only count a low-end share of likely payouts.
@@ -23,7 +31,7 @@ export interface ForecastInput {
   recurring?: RecurringSeries[]; // defaults to detectRecurring(transactions, today)
 }
 
-export type Forecast = Omit<GetSafeToSaveResponse, "explanationSource"> & { incomeIsIrregular: boolean };
+export type Forecast = Pick<GetSafeToSaveResponse, "amount" | "explanation" | "nextPayday" | "breakdown"> & { incomeIsIrregular: boolean };
 
 interface IncomePlan {
   nextPayday: IsoDate;
@@ -81,6 +89,26 @@ function averageDailyVariableSpend(today: IsoDate, transactions: TransactionLike
   return { perDay: total / windowDays, windowDays };
 }
 
+// Everyday spend over every past window of `days` days (last 90 days, within the history), at the 80th percentile.
+function heavyStretchSpend(today: IsoDate, transactions: TransactionLike[], series: RecurringSeries[], days: number): number {
+  if (days <= 0 || transactions.length === 0) return 0;
+  const firstDate = transactions.reduce((earliest, t) => (t.date < earliest ? t.date : earliest), transactions[0].date);
+  const from = [firstDate, addDays(today, -(HEAVY_STRETCH_LOOKBACK_DAYS - 1))].sort().at(-1)!;
+  const recurringKeys = new Set(series.map((s) => s.key));
+  const daily = new Map<IsoDate, number>();
+  for (const t of transactions) {
+    if (t.amount <= 0 || t.date < from || t.date > today || recurringKeys.has(seriesKey(t)) || categorize(t.merchant) === "transfer") continue;
+    daily.set(t.date, (daily.get(t.date) ?? 0) + t.amount);
+  }
+  const windowSums: number[] = [];
+  for (let start = from; addDays(start, days - 1) <= today; start = addDays(start, 1)) {
+    let sum = 0;
+    for (let k = 0; k < days; k++) sum += daily.get(addDays(start, k)) ?? 0;
+    windowSums.push(sum);
+  }
+  return percentile(windowSums, HEAVY_STRETCH_PERCENTILE);
+}
+
 const ACRONYMS = new Set(["USA", "US", "LLC", "INC", "CVS", "ATM", "TV", "BP", "AT&T", "HBO", "AMC"]);
 
 // "ELM STREET APARTMENTS" → "Elm Street Apartments", "SPOTIFY USA" → "Spotify USA"
@@ -106,7 +134,9 @@ export function forecastSafeToSave({ today, currentBalance, transactions, recurr
   const upcomingBills = billsThrough(series, today, income.nextPayday);
   const upcomingBillsTotal = upcomingBills.reduce((sum, b) => sum + b.amount, 0);
   const variable = averageDailyVariableSpend(today, transactions, series);
-  const projectedSpending = Math.round(variable.perDay * daysUntilPayday);
+  const typicalSpending = Math.round(variable.perDay * daysUntilPayday);
+  const heavySpending = Math.round(heavyStretchSpend(today, transactions, series, daysUntilPayday));
+  const projectedSpending = Math.max(typicalSpending, heavySpending);
   const safetyBuffer = Math.max(MIN_BUFFER, Math.round(BUFFER_SHARE_OF_BILLS * upcomingBillsTotal));
   const amount = Math.max(0, currentBalance + income.expectedIncome - upcomingBillsTotal - projectedSpending - safetyBuffer);
 
@@ -121,10 +151,12 @@ export function forecastSafeToSave({ today, currentBalance, transactions, recurr
     upcomingBills.length > 0
       ? `${listBills(upcomingBills)} (${formatCents(upcomingBillsTotal)}) ${new Set(upcomingBills.map((b) => b.merchant)).size === 1 ? "is" : "are"} due before then, so we set that aside first.`
       : `No bills are due before then.`,
-    `Based on your ${variable.windowDays >= VARIABLE_SPEND_WINDOW_DAYS ? "last two months" : "recent spending"}, about ${formatCents(projectedSpending)} covers everyday spending until then.`,
+    heavySpending > typicalSpending
+      ? `Your spending varies, so we plan for a heavier-than-usual stretch: about ${formatCents(projectedSpending)} covers everyday spending until then (enough for 4 out of 5 recent stretches like this).`
+      : `Based on your ${variable.windowDays >= VARIABLE_SPEND_WINDOW_DAYS ? "last two months" : "recent spending"}, about ${formatCents(projectedSpending)} covers everyday spending until then.`,
     amount > 0
-      ? `We keep a ${formatCents(safetyBuffer)} cushion, which leaves ${formatCents(amount)} you can safely move to your goal.`
-      : `After a ${formatCents(safetyBuffer)} cushion there's nothing extra this time, and that's okay.`,
+      ? `After a ${formatCents(safetyBuffer)} cushion, you have ${formatCents(amount)} in remaining money you could move to your goal.`
+      : `After a ${formatCents(safetyBuffer)} cushion there's no remaining money this time, and that's okay.`,
   ];
 
   return {

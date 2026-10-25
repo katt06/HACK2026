@@ -2,20 +2,36 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import type { AccountDoc, ChallengeDoc, GoalDoc, GoalEntryDoc, ScoreDoc, TransactionDoc, UserDoc } from "./contract.js";
+import type { AccountDoc, ChallengeDoc, GoalDoc, GoalEntryDoc, GroupDoc, ScoreDoc, SquadContributionDoc, SquadGoalDoc, TransactionDoc, UserDoc } from "./contract.js";
 import { todayIso } from "./logic/dates.js";
 import { zeroSafeToSaveDaysCounter } from "./logic/safeToSaveHistory.js";
-import { computeScore } from "./logic/scoring.js";
+import { computeScore, type GoalWithEntries } from "./logic/scoring.js";
+import { squadBonusPoints, squadShareGoal } from "./logic/squad.js";
+
+// The squad goals of every group the user is in, with the user's own contributions to each.
+async function loadSquads(db: Firestore, uid: string) {
+  const groups = await db.collection("groups").where("members", "array-contains", uid).get();
+  const squads = await Promise.all(
+    groups.docs.map(async (g) => {
+      const squad = (await db.doc(`squadGoals/${g.id}`).get()).data() as SquadGoalDoc | undefined;
+      if (!squad) return null;
+      const mine = await db.collection(`squadGoals/${g.id}/contributions`).where("userId", "==", uid).get();
+      return { squad, members: (g.data() as GroupDoc).members.length, mine: mine.docs.map((d) => d.data() as SquadContributionDoc) };
+    }),
+  );
+  return squads.filter((s) => s !== null);
+}
 
 // Loads everything the score depends on and rewrites scores/{uid}. Safe to call any time; it's idempotent.
 export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreDoc> {
-  const [userSnap, goalsSnap, challengesSnap, accountSnap, txSnap, scoreSnap] = await Promise.all([
+  const [userSnap, goalsSnap, challengesSnap, accountSnap, txSnap, scoreSnap, squads] = await Promise.all([
     db.doc(`users/${uid}`).get(),
     db.collection("goals").where("ownerId", "==", uid).get(),
     db.collection("challenges").where("userId", "==", uid).where("status", "==", "completed").get(),
     db.doc(`accounts/${uid}`).get(),
     db.collection("transactions").where("userId", "==", uid).get(),
     db.doc(`scores/${uid}`).get(),
+    loadSquads(db, uid),
   ]);
   const user = userSnap.data() as UserDoc | undefined;
   const today = todayIso(new Date(), user?.settings?.timezone);
@@ -39,6 +55,8 @@ export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreD
     zeroSafeToSaveDays: account
       ? zeroSafeToSaveDaysCounter({ today, currentBalance: account.currentBalance, balanceAsOf: account.asOf, transactions })
       : undefined,
+    squadShares: squads.map((s) => squadShareGoal(s.squad, s.members, s.mine)).filter((g): g is GoalWithEntries => g !== null),
+    squadBonusPoints: squadBonusPoints(squads.map((s) => s.squad)),
     previousBadges: (scoreSnap.data() as ScoreDoc | undefined)?.badges,
   });
   // Merge so fields this doesn't compute (the equipped avatar) are kept.
@@ -46,7 +64,7 @@ export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreD
   return score;
 }
 
-async function recomputeQuietly(uid: string | undefined) {
+export async function recomputeQuietly(uid: string | undefined) {
   if (!uid) return;
   try {
     await recomputeScore(getFirestore(), uid);

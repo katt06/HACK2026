@@ -23,7 +23,7 @@
 
 ## Data model
 - users/{uid}: displayName, baselineSpendByCategory, settings
-- goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation, pausedUntil, createdAt
+- goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation, pausedUntil, createdAt, autoSave?, autoSaveLastRunOn? (autoSave* are server-only, set via setAutoSave)
 - goals/{id}/entries/{id}: kind (contribution | expense), amount, note, createdAt; contributions have verified (clients can only write false); expenses have choice (pause | lowerPace), weeksLater
 - accounts/{uid} (server-only): userId, currentBalance, asOf
 - transactions/{id} (server-only): userId, amount, category, merchant, date, recurringId
@@ -33,10 +33,11 @@
 - groups/{id}: name, members[], memberNames{uid: displayName}, inviteCode (6 chars, created client-side; joined only via the joinGroup callable)
 - scores/{uid}: userId, goalProgressPct, streak, improvementScore, points, level
 - rateLimits/{uid} (server-only): llmCalls[] timestamps in the last hour (10 LLM calls/hour/user)
+- squadGoals/{groupId} (server-only): one shared goal per group: name, targetAmount, currentAmount, deadline, createdBy, createdAt, completedAt; /contributions/{id}: userId, amount, createdAt. Members read via getSquadGoal (progress %, never others' dollars)
 - scoreViewers/{uid} (server-only): uids[] of everyone who shares a group with uid; lets rules check score access
 
 ## Callable functions (contract)
-getSafeToSave, getChallenges, completeChallenge, getLeaderboard, joinGroup
+getSafeToSave (shown as "remaining money"), getChallenges, acceptChallenge, completeChallenge, getLeaderboard, joinGroup, addToGoal, setAutoSave, createSquadGoal, getSquadGoal, contributeToSquadGoal
 
 ## Conventions
 - Small, pure, unit-tested functions for the logic (forecast, scoring, recurring, bandit). Use Vitest.

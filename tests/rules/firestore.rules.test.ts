@@ -85,8 +85,9 @@ describe("a group member can't see another member's private data", () => {
 });
 
 describe("server-only collections", () => {
-  it("even the owner can't read or write transactions, recurring, accounts, banditStats, scoreViewers", async () => {
-    for (const path of ["transactions/t1", "recurring/alice_rent", "accounts/alice", "banditStats/alice_no_spend_day_easy", "scoreViewers/alice"]) {
+  it("even the owner can't read or write transactions, recurring, accounts, banditStats, scoreViewers, squad goals", async () => {
+    const paths = ["transactions/t1", "recurring/alice_rent", "accounts/alice", "banditStats/alice_no_spend_day_easy", "scoreViewers/alice", "squadGoals/g1", "squadGoals/g1/contributions/c1"];
+    for (const path of paths) {
       await assertFails(getDoc(doc(db("alice"), path)));
       await assertFails(setDoc(doc(db("alice"), path), { userId: "alice" }));
     }
@@ -142,6 +143,12 @@ describe("goals", () => {
     await assertFails(updateDoc(doc(db("alice"), "goals/alice-goal"), { verified: true }));
     await assertFails(addDoc(collection(db("alice"), "goals"), { ...goal("alice"), verified: true }));
     await assertFails(addDoc(collection(db("alice"), "goals"), goal("bob")));
+  });
+
+  it("can't set auto-save directly (setAutoSave validates it)", async () => {
+    await assertFails(updateDoc(doc(db("alice"), "goals/alice-goal"), { autoSave: { kind: "percentOfBalance", percent: 100 } }));
+    await assertFails(updateDoc(doc(db("alice"), "goals/alice-goal"), { autoSaveLastRunOn: "2026-10-24" }));
+    await assertFails(addDoc(collection(db("alice"), "goals"), { ...goal("alice"), autoSave: { kind: "fixed", amount: 100 } }));
   });
 
   it("only accept unverified contributions", async () => {

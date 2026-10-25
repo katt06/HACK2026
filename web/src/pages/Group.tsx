@@ -5,6 +5,7 @@ import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { JoinGroupForm } from "../components/JoinGroupForm";
 import { EmptyState } from "../components/EmptyState";
+import { SquadGoalCard } from "../components/SquadGoalCard";
 import { Avatar } from "../avatar/Avatar";
 import { inviteLink } from "../lib/inviteCode";
 
@@ -67,6 +68,9 @@ function GroupCard({ group, fresh, avatars }: { group: GroupSummary; fresh: Set<
           ))}
         </ul>
         <InviteBox group={group} />
+      </div>
+      <div className="mt-4">
+        <SquadGoalCard groupId={group.id} />
       </div>
     </section>
   );

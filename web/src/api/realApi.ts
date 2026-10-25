@@ -105,6 +105,11 @@ export const realApi: Api = {
       streak: scoreSnap.exists() ? (scoreSnap.data() as ScoreDoc).streak : 0,
     };
   },
+  addToGoal: (goalId, amount) => call("addToGoal", { goalId, amount }),
+  setAutoSave: (goalId, rule) => call("setAutoSave", { goalId, rule }),
+  getSquadGoal: async (groupId) => (await call("getSquadGoal", { groupId })).squadGoal,
+  createSquadGoal: async (input) => (await call("createSquadGoal", input)).squadGoal,
+  contributeToSquadGoal: (groupId, amount) => call("contributeToSquadGoal", { groupId, amount }),
   purchaseItem: (itemId) => call("purchaseItem", { itemId }),
   equipItem: (slot, itemId) => call("equipItem", { slot, itemId }),
   // Rules let group members get each other's score doc, which is where the avatar lives.

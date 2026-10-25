@@ -11,6 +11,7 @@
     "seed": "tsx scripts/seed.ts",
     "simulate": "tsx scripts/simulateBandit.ts",
     "eval:challenges": "tsx scripts/evalChallenges.ts",
+    "payday": "tsx scripts/simulatePayday.ts",
     "test": "npm test --workspaces --if-present",
     "test:rules": "firebase emulators:exec --only firestore --project demo-hack2026 \"vitest run --config tests/rules/vitest.config.ts\"",
     "build": "npm run build --workspaces"

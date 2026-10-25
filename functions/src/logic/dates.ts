@@ -54,3 +54,8 @@ export function formatDay(date: IsoDate): string {
 export function isIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && toIsoDate(parseIsoDate(value)) === value;
 }
+
+// "May 2"
+export function formatMonthDay(date: IsoDate): string {
+  return new Date(parseIsoDate(date)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}

@@ -106,7 +106,18 @@ export interface GoalDoc {
   sizingRecommendation: SizingRecommendation | null; // server-only
   pausedUntil: IsoDate | null; // set by goal flex "pause"; no saving expected before this date
   createdAt: IsoDateTime;
+  // Server-only (set through setAutoSave). Optional so goals created before auto-save existed stay valid.
+  autoSave?: AutoSaveRule | null;
+  autoSaveLastRunOn?: IsoDate | null; // auto-save runs at most once per goal per day
 }
+
+// Recurring "auto-save" (never called investing): runs each payday, capped at that day's remaining money
+// so it can't leave the user short before the next paycheck.
+export type AutoSaveRule =
+  | { kind: "percentOfBalance"; percent: number } // whole percent, 1–50
+  | { kind: "fixed"; amount: Cents };
+
+export const AUTO_SAVE_MAX_PERCENT = 50;
 
 export const GOAL_NAME_MAX = 60;
 
@@ -233,6 +244,30 @@ export function toGroupSummary(id: string, group: GroupDoc, viewerUid: string): 
     })),
   };
 }
+
+// squadGoals/{groupId} (server-only): one shared goal per group. Members read it through getSquadGoal,
+// which never shows anyone else's dollar amounts (scores-only rule for group members).
+export interface SquadGoalDoc {
+  groupId: string;
+  name: string; // 1–60 chars
+  targetAmount: Cents;
+  currentAmount: Cents;
+  deadline: IsoDate;
+  createdBy: string;
+  createdAt: IsoDateTime;
+  completedAt: IsoDateTime | null;
+}
+
+// squadGoals/{groupId}/contributions/{id} (server-only)
+export interface SquadContributionDoc {
+  userId: string;
+  amount: Cents;
+  createdAt: IsoDateTime;
+}
+
+// Every member earns SQUAD_MILESTONE_POINTS for each milestone the squad reaches.
+export const SQUAD_MILESTONES = [25, 50, 75, 100] as const;
+export const SQUAD_MILESTONE_POINTS = 25;
 
 // scores/{uid}. Readable by group members, so never put dollar amounts here.
 export interface ScoreDoc {
@@ -390,6 +425,16 @@ export interface SafeToSaveHistoryPoint {
   balance: Cents; // checking balance that day
 }
 
+// Backtest: if the user had moved the suggested amount on each recent payday, would they have stayed above $0?
+export interface TrackRecord {
+  checks: number; // past paydays (or two-week check-ins for irregular income) tested
+  stayedPositive: number; // how many of those kept the balance at or above $0 until the next one
+  lowestBalance: Cents; // lowest balance across all of them, after moving the amount
+  since: IsoDate; // date of the first check
+  summary: string; // one plain-English line for the UI
+}
+
+// Shown in the app as "remaining money" / "left over" (the callable keeps its original name).
 export interface GetSafeToSaveResponse {
   amount: Cents;
   explanation: string[]; // short bullet sentences, coach voice
@@ -399,6 +444,9 @@ export interface GetSafeToSaveResponse {
   // Last ~30 days ending today, oldest first. Optional: the web app hides the chart until it's filled
   // (logic/safeToSaveHistory.ts already has safeToSaveOn and balanceOn for this).
   history?: SafeToSaveHistoryPoint[];
+  // Optional extra: one-line backtest of moving the suggested amount on recent paydays. Null until there's
+  // ~3 months of history; missing when there's no account.
+  trackRecord?: TrackRecord | null;
 }
 
 // getChallenges: returns the caller's open (active or accepted) challenges, generating them if needed.
@@ -427,6 +475,81 @@ export interface CompleteChallengeResponse {
   pointsAwarded: number;
   score: ScoreDoc; // caller's score after the update
   leveledUp: boolean;
+}
+
+// addToGoal: move money from the tracked checking balance into a goal (an in-app transfer; the app
+// can't move real money). Recorded as a verified contribution.
+export interface AddToGoalRequest {
+  goalId: string;
+  amount: Cents; // > 0, at most the balance and what's left to reach the goal
+}
+
+export interface AddToGoalResponse {
+  goal: WithId<GoalDoc>;
+  entry: ContributionEntry;
+  newBalance: Cents;
+}
+
+// setAutoSave: rule = null turns it off.
+export interface SetAutoSaveRequest {
+  goalId: string;
+  rule: AutoSaveRule | null;
+}
+
+export interface SetAutoSaveResponse {
+  goal: WithId<GoalDoc>;
+}
+
+// Squad goals. Members see progress %, milestones, and who chipped in; dollars only for themselves.
+export interface SquadMemberProgress {
+  userId: string;
+  displayName: string;
+  isMe: boolean;
+  contributions: number; // how many times, not how much
+  contributedThisWeek: boolean;
+}
+
+export interface SquadGoalSummary {
+  groupId: string;
+  name: string;
+  deadline: IsoDate;
+  progressPct: number; // 0–100, rounded down
+  milestonesReached: number[]; // subset of SQUAD_MILESTONES
+  isComplete: boolean;
+  createdByMe: boolean;
+  myContributed: Cents; // the caller's own total; nobody else's is ever returned
+  members: SquadMemberProgress[];
+}
+
+export interface CreateSquadGoalRequest {
+  groupId: string;
+  name: string;
+  targetAmount: Cents; // $10–$100,000
+  deadline: IsoDate; // in the future
+}
+
+export interface CreateSquadGoalResponse {
+  squadGoal: SquadGoalSummary;
+}
+
+export interface GetSquadGoalRequest {
+  groupId: string;
+}
+
+export interface GetSquadGoalResponse {
+  squadGoal: SquadGoalSummary | null; // null when the group hasn't set one up
+}
+
+// Moves money from the caller's tracked checking balance into the squad goal.
+export interface ContributeToSquadGoalRequest {
+  groupId: string;
+  amount: Cents;
+}
+
+export interface ContributeToSquadGoalResponse {
+  squadGoal: SquadGoalSummary;
+  newBalance: Cents;
+  newMilestones: number[]; // milestones this contribution unlocked, for a celebration
 }
 
 // getLeaderboard
@@ -481,6 +604,11 @@ export interface Callables {
   getChallenges: { request: GetChallengesRequest; response: GetChallengesResponse };
   acceptChallenge: { request: AcceptChallengeRequest; response: AcceptChallengeResponse };
   completeChallenge: { request: CompleteChallengeRequest; response: CompleteChallengeResponse };
+  addToGoal: { request: AddToGoalRequest; response: AddToGoalResponse };
+  setAutoSave: { request: SetAutoSaveRequest; response: SetAutoSaveResponse };
+  createSquadGoal: { request: CreateSquadGoalRequest; response: CreateSquadGoalResponse };
+  getSquadGoal: { request: GetSquadGoalRequest; response: GetSquadGoalResponse };
+  contributeToSquadGoal: { request: ContributeToSquadGoalRequest; response: ContributeToSquadGoalResponse };
   getLeaderboard: { request: GetLeaderboardRequest; response: GetLeaderboardResponse };
   joinGroup: { request: JoinGroupRequest; response: JoinGroupResponse };
   purchaseItem: { request: PurchaseItemRequest; response: PurchaseItemResponse };
