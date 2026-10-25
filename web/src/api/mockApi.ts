@@ -1,12 +1,19 @@
 // In-memory mock of the callables. State resets on page reload.
 import { FirebaseError } from "firebase/app";
 import {
+  DEFAULT_AVATAR,
   MAX_GROUP_MEMBERS,
+  checkEquip,
+  checkPurchase,
+  ownedItems,
+  evaluateBadges,
+  levelProgress,
   normalizeInviteCode,
   toGroupSummary,
   GOAL_NAME_MAX,
   type ChallengeDoc,
   type CompleteChallengeResponse,
+  type ItemId,
   type GoalDoc,
   type GoalEntryDoc,
   type GetLeaderboardResponse,
@@ -15,6 +22,7 @@ import {
   type GroupSummary,
   type IsoDate,
   type LeaderboardEntry,
+  type SafeToSaveHistoryPoint,
   type ScoreDoc,
   type WithId,
 } from "@contract";
@@ -22,7 +30,7 @@ import { formatCents } from "../lib/format";
 import { addDays as addIsoDays, todayIso } from "../lib/dates";
 import { generateInviteCode } from "../lib/inviteCode";
 import { DEFAULT_PERSONA, MOCK_GROUPS, PERSONAS, type ChallengeSeed, type Persona, type PersonaId } from "./mockData";
-import type { Api, ApiMethod } from "./types";
+import type { Activity, Api, ApiMethod } from "./types";
 
 export interface MockSettings {
   persona: PersonaId; // whose data "me" is
@@ -48,6 +56,10 @@ export interface MockControls {
 
 interface PersonaState {
   score: ScoreDoc;
+  coins: number;
+  inventory: ItemId[];
+  challengesCompleted: number;
+  history: Activity["completedChallenges"]; // dated completions for the calendar
   active: WithId<ChallengeDoc>[];
   nextSeed: number; // index into persona.challenges of the next refill
 }
@@ -92,6 +104,54 @@ function challengeFrom(p: Persona, seedIndex: number, createdAt: string): WithId
   };
 }
 
+// Deterministic 0–1 numbers from a string seed (mulberry32), so each persona's history is stable.
+function seededRandom(seed: string): () => number {
+  let a = [...seed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 2654435761), 1779033703) >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Up to 30 of a persona's lifetime completions, spread over the last 6 weeks (stable per persona).
+export function mockChallengeHistory(p: Persona, now: Date): Activity["completedChallenges"] {
+  const rand = seededRandom(`${p.id}-challenges`);
+  const n = Math.min(p.challengesCompleted, 30);
+  return Array.from({ length: n }, (_, i) => {
+    const seed = p.challenges[i % p.challenges.length];
+    const daysAgo = 1 + Math.floor(((n - 1 - i) * 41) / Math.max(1, n) + rand() * 2);
+    const day = addDays(now, -daysAgo);
+    day.setHours(9 + Math.floor(rand() * 11), 0, 0, 0);
+    return { id: `${p.id}-done-${i + 1}`, description: seed.description, points: seed.points, completedAt: day.toISOString() };
+  });
+}
+
+// 30 days of balance and left-over ending exactly at today's values. Walks backwards from today, undoing
+// each day: add back everyday spending and last month's bills (all treated as monthly), and take out
+// paychecks (every 14 days before the next one), sized so a month's income covers bills plus spending.
+// Each day's left-over sets aside that day's bills due before its next payday, spending until then, and the cushion.
+export function mockHistory(p: Persona, today: Date, balance: number, days = 30): SafeToSaveHistoryPoint[] {
+  const rand = seededRandom(p.id);
+  const dailySpend = p.projectedSpending / Math.max(1, p.paydayInDays);
+  const monthlyBills = p.bills.reduce((sum, bill) => sum + bill.amount, 0);
+  const paycheck = ((monthlyBills + dailySpend * 30) * 14) / 30;
+  const points: SafeToSaveHistoryPoint[] = [];
+  let b = balance;
+  for (let i = 0; i < days; i++) {
+    const day = addDays(today, -i);
+    const daysToPayday = (p.paydayInDays + i) % 14 || 14;
+    const billsDue = p.bills.filter((bill) => (bill.dueInDays + i) % 30 <= daysToPayday).reduce((sum, bill) => sum + bill.amount, 0);
+    const committed = billsDue + dailySpend * daysToPayday + p.safetyBuffer;
+    points.push({ date: isoDate(day), balance: Math.round(b), amount: Math.max(0, Math.round(b - committed)) });
+    const billsPaid = p.bills.filter((bill) => bill.dueInDays + i === 30).reduce((sum, bill) => sum + bill.amount, 0);
+    const isPayday = (p.paydayInDays + i) % 14 === 0;
+    b += dailySpend * (0.4 + rand() * 1.2) + billsPaid - (isPayday ? paycheck : 0);
+  }
+  return points.reverse();
+}
+
 function joinNames(names: string[]): string {
   return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
@@ -104,6 +164,8 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
   let state = initialState();
   let groups = initialGroups();
   let goals = initialGoals();
+  // Money "moved" from checking into goals this session, so the mock balance updates after contributions.
+  let movedToGoals = new Map<PersonaId, number>();
 
   function initialState(): Map<PersonaId, PersonaState> {
     const createdAt = now().toISOString();
@@ -111,7 +173,11 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
       PERSONAS.map((p) => [
         p.id,
         {
-          score: { ...p.score, userId: uidFor(p.id), level: levelFor(p.score.points) },
+          score: { ...p.score, userId: uidFor(p.id), level: levelFor(p.score.points), avatar: p.avatar },
+          coins: p.coins,
+          inventory: [...p.inventory],
+          challengesCompleted: p.challengesCompleted,
+          history: mockChallengeHistory(p, now()),
           active: [0, 1, 2].map((i) => challengeFrom(p, i, createdAt)),
           nextSeed: 3,
         },
@@ -211,38 +277,99 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           dueDate: isoDate(addDays(today, b.dueInDays)),
         }));
         const upcomingBillsTotal = upcomingBills.reduce((sum, b) => sum + b.amount, 0);
-        const amount = Math.max(0, p.currentBalance - upcomingBillsTotal - p.projectedSpending - p.safetyBuffer);
+        const balance = p.currentBalance - (movedToGoals.get(p.id) ?? 0);
+        const committed = upcomingBillsTotal + p.projectedSpending + p.safetyBuffer;
+        const amount = Math.max(0, balance - committed);
         const paydayText = payday.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
         return {
           amount,
           explanation: [
-            `You have ${formatCents(p.currentBalance)} in checking, and your next paycheck should land ${paydayText}.`,
+            `You have ${formatCents(balance)} in checking, and your next paycheck should land ${paydayText}.`,
             `${joinNames(p.bills.map((b) => b.merchant))} (${formatCents(upcomingBillsTotal)}) ${p.bills.length === 1 ? "is" : "are"} due before then, so we set that aside first.`,
             `Based on your usual spending, about ${formatCents(p.projectedSpending)} covers everything else until payday.`,
             p.insight,
             amount > 0
-              ? `After a ${formatCents(p.safetyBuffer)} cushion, you have ${formatCents(amount)} in remaining money you could move to your goal.`
-              : `After a ${formatCents(p.safetyBuffer)} cushion there's no remaining money this time, and that's okay.`,
+              ? `We keep a ${formatCents(p.safetyBuffer)} cushion, which leaves ${formatCents(amount)} you can safely move to your goal.`
+              : `After a ${formatCents(p.safetyBuffer)} cushion there's nothing extra this time, and that's okay.`,
           ],
           explanationSource: "template",
           nextPayday: isoDate(payday),
+          history: mockHistory(p, today, balance),
           breakdown: {
-            currentBalance: p.currentBalance,
+            currentBalance: balance,
             expectedIncome: 0,
             upcomingBillsTotal,
             upcomingBills,
             projectedSpending: p.projectedSpending,
             safetyBuffer: p.safetyBuffer,
           },
-          history: [], // TODO(frontend): mock data for the remaining-money chart
-          trackRecord: null,
         };
       }),
 
     getChallenges: () => respond("getChallenges", () => ({ challenges: mine().active })),
 
     getMyScore: () => respond("getMyScore", () => mine().score),
+
+    getGameState: () =>
+      respond("getGameState", () => {
+        const s = mine();
+        const goalsCreated = [...goals.values()].filter((g) => g.goal.ownerId === uidFor(settings.persona)).length;
+        return {
+          xp: s.score.points,
+          ...levelProgress(s.score.points),
+          coins: s.coins,
+          badges: evaluateBadges({ goalsCreated, streak: s.score.streak, challengesCompleted: s.challengesCompleted }),
+          avatar: s.score.avatar ?? DEFAULT_AVATAR,
+          owned: ownedItems(s.inventory),
+        };
+      }),
+
+    getActivity: () =>
+      respond("getActivity", (): Activity => {
+        const s = mine();
+        const myGoals = [...goals.values()].filter((g) => g.goal.ownerId === uidFor(settings.persona));
+        return {
+          completedChallenges: s.history,
+          contributions: myGoals.flatMap(({ goal, entries }) =>
+            entries.flatMap((e) => (e.kind === "contribution" ? [{ goalName: goal.name, amount: e.amount, createdAt: e.createdAt }] : [])),
+          ),
+          streak: s.score.streak,
+        };
+      }),
+
+    // Same rules as the purchaseItem / equipItem callables (both use the contract's checks).
+    purchaseItem: (itemId) =>
+      respond("purchaseItem", () => {
+        const s = mine();
+        const result = checkPurchase(s.coins, s.inventory, itemId);
+        if (!result.ok) {
+          throw new FirebaseError("functions/failed-precondition", result.reason === "owned" ? "You already have this one." : "Not enough coins yet.");
+        }
+        s.coins = result.coins;
+        s.inventory = result.inventory;
+        return { coins: s.coins, owned: ownedItems(s.inventory) };
+      }),
+
+    equipItem: (slot, itemId) =>
+      respond("equipItem", () => {
+        const s = mine();
+        const result = checkEquip(s.score.avatar ?? DEFAULT_AVATAR, s.inventory, slot, itemId);
+        if (!result.ok) {
+          throw new FirebaseError("functions/failed-precondition", result.reason === "not-owned" ? "Buy this item first." : "That item doesn't go there.");
+        }
+        s.score = { ...s.score, avatar: result.avatar };
+        return { avatar: result.avatar };
+      }),
+
+    getAvatars: (uids) =>
+      respond("getAvatars", () => {
+        const avatarOf = (uid: string) => {
+          const p = PERSONAS.find((x) => uidFor(x.id) === uid);
+          return (p && state.get(p.id)!.score.avatar) || DEFAULT_AVATAR;
+        };
+        return Object.fromEntries(uids.map((uid) => [uid, avatarOf(uid)]));
+      }),
 
     acceptChallenge: (challengeId) =>
       respond("acceptChallenge", () => {
@@ -269,6 +396,9 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         const levelBefore = s.score.level;
         const points = s.score.points + challenge.points;
         s.score = { ...s.score, points, level: levelFor(points) };
+        s.coins += challenge.points; // coins are earned 1:1 with XP
+        s.challengesCompleted += 1;
+        s.history.push({ id: challenge.id, description: challenge.description, points: challenge.points, completedAt: challenge.completedAt! });
 
         // Replace the completed challenge with the next seed, if any are left.
         const p = persona();
@@ -385,6 +515,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         if (!Number.isInteger(amount) || amount <= 0) throw new FirebaseError("permission-denied", "Invalid amount.");
         const g = myGoal(goalId);
         g.goal.currentAmount += amount;
+        movedToGoals.set(settings.persona, (movedToGoals.get(settings.persona) ?? 0) + amount);
         addEntry(g, { kind: "contribution", amount, verified: false, note: note.trim(), createdAt: now().toISOString() });
       }),
 
@@ -426,6 +557,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
       state = initialState();
       groups = initialGroups();
       goals = initialGoals();
+      movedToGoals = new Map();
       notify();
     },
     status() {

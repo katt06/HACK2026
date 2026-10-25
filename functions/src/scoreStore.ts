@@ -24,12 +24,13 @@ async function loadSquads(db: Firestore, uid: string) {
 
 // Loads everything the score depends on and rewrites scores/{uid}. Safe to call any time; it's idempotent.
 export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreDoc> {
-  const [userSnap, goalsSnap, challengesSnap, accountSnap, txSnap, squads] = await Promise.all([
+  const [userSnap, goalsSnap, challengesSnap, accountSnap, txSnap, scoreSnap, squads] = await Promise.all([
     db.doc(`users/${uid}`).get(),
     db.collection("goals").where("ownerId", "==", uid).get(),
     db.collection("challenges").where("userId", "==", uid).where("status", "==", "completed").get(),
     db.doc(`accounts/${uid}`).get(),
     db.collection("transactions").where("userId", "==", uid).get(),
+    db.doc(`scores/${uid}`).get(),
     loadSquads(db, uid),
   ]);
   const user = userSnap.data() as UserDoc | undefined;
@@ -56,8 +57,10 @@ export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreD
       : undefined,
     squadShares: squads.map((s) => squadShareGoal(s.squad, s.members, s.mine)).filter((g): g is GoalWithEntries => g !== null),
     squadBonusPoints: squadBonusPoints(squads.map((s) => s.squad)),
+    previousBadges: (scoreSnap.data() as ScoreDoc | undefined)?.badges,
   });
-  await db.doc(`scores/${uid}`).set(score);
+  // Merge so fields this doesn't compute (the equipped avatar) are kept.
+  await db.doc(`scores/${uid}`).set(score, { merge: true });
   return score;
 }
 

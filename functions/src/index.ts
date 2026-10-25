@@ -12,6 +12,7 @@ export { joinGroup } from "./groups.js";
 export { getLeaderboard } from "./leaderboard.js";
 export { refreshRecurring } from "./recurringJob.js";
 export { getSafeToSave } from "./safeToSave.js";
+export { equipItem, purchaseItem } from "./shop.js";
 export { onChallengeWritten, onGoalEntryWritten, onGoalWritten, refreshScores } from "./scoreStore.js";
 export { syncScoreViewers } from "./scoreViewers.js";
 export { contributeToSquadGoal, createSquadGoal, getSquadGoal, onSquadGoalWritten } from "./squadGoals.js";

@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { generateSeedData, generateSeedUser } from "../../../scripts/seedData.js";
 import { addDays } from "./dates.js";
-import { forecastSafeToSave } from "./forecast.js";
 import type { TransactionLike } from "./recurring.js";
-import { backtest, checkpoints, remainingMoneyHistory } from "./trackRecord.js";
+import { backtest, checkpoints } from "./trackRecord.js";
 
 const TODAY = "2026-10-24";
 const inputFor = (u: ReturnType<typeof generateSeedUser>) => ({
@@ -11,20 +10,6 @@ const inputFor = (u: ReturnType<typeof generateSeedUser>) => ({
   currentBalance: u.account.currentBalance,
   balanceAsOf: TODAY,
   transactions: u.transactions,
-});
-
-describe("remainingMoneyHistory", () => {
-  it("gives 12 weekly points ending today, matching today's forecast", () => {
-    const alex = generateSeedUser("demo-hero", TODAY);
-    const history = remainingMoneyHistory(inputFor(alex));
-    expect(history.map((p) => p.date)).toEqual(Array.from({ length: 12 }, (_, i) => addDays(TODAY, -7 * (11 - i))));
-    expect(history.at(-1)!.amount).toBe(forecastSafeToSave({ today: TODAY, currentBalance: alex.account.currentBalance, transactions: alex.transactions }).amount);
-    expect(history.every((p) => p.amount >= 0)).toBe(true);
-  });
-
-  it("is empty with no transactions", () => {
-    expect(remainingMoneyHistory({ today: TODAY, currentBalance: 0, balanceAsOf: TODAY, transactions: [] })).toEqual([]);
-  });
 });
 
 describe("checkpoints", () => {

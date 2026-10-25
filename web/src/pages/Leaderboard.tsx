@@ -4,6 +4,10 @@ import type { GetLeaderboardResponse, GroupSummary, LeaderboardEntry } from "@co
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { cardClass } from "../components/forms";
+import { Avatar } from "../avatar/Avatar";
+import { EmptyState } from "../components/EmptyState";
+import { HerdChart } from "../components/HerdChart";
+import { ProgressBar } from "../components/ProgressBar";
 import { Skeleton } from "../components/Skeleton";
 
 const PREFERRED_GROUP = "demo-group";
@@ -29,9 +33,9 @@ function saveRanks(groupId: string, entries: LeaderboardEntry[]) {
 function Explainer() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-emerald-900 lg:px-6 lg:py-4">
+    <div className="mb-4 rounded-2xl border-2 border-mint bg-primary-soft px-4 py-3 text-heading lg:px-6 lg:py-4">
       <p className="font-medium lg:text-lg">Scores are based on your own goal, so income doesn't matter.</p>
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 text-sm font-semibold text-emerald-700">
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 text-sm font-semibold text-link">
         {open ? "Hide" : "How scores work"}
       </button>
       {open && (
@@ -45,7 +49,7 @@ function Explainer() {
           <li>
             <strong>+ 10 per streak week</strong>: every week in a row you hit your savings target
           </li>
-          <li className="text-emerald-700">No dollar amounts are ever shared with your group.</li>
+          <li className="text-link">No dollar amounts are ever shared with your group.</li>
         </ul>
       )}
     </div>
@@ -56,7 +60,7 @@ function RankChange({ delta }: { delta: number }) {
   if (!delta) return null;
   const up = delta > 0;
   return (
-    <span className={`rounded-full px-1.5 text-xs font-bold ${up ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+    <span className={`rounded-full px-1.5 text-xs font-extrabold ${up ? "bg-primary-soft text-link" : "bg-danger-soft text-danger"}`}>
       {up ? "▲" : "▼"}
       {Math.abs(delta)}
     </span>
@@ -70,32 +74,33 @@ function Row({ entry, delta, rowRef }: { entry: LeaderboardEntry; delta: number;
   return (
     <li
       ref={rowRef}
-      className={`relative grid grid-cols-[2rem_1fr_auto] items-center gap-x-3 gap-y-1 rounded-2xl p-4 shadow-sm ${COLUMNS} lg:gap-x-4 lg:px-6 lg:py-5 lg:text-lg ${
-        entry.isMe ? "z-10 bg-emerald-50 ring-2 ring-emerald-500" : "bg-white"
+      className={`relative grid grid-cols-[2rem_1fr_auto] items-center gap-x-3 gap-y-1 rounded-2xl border-2 p-4 ${COLUMNS} lg:gap-x-4 lg:px-6 lg:py-5 lg:text-lg ${
+        entry.isMe ? "z-10 border-leaf bg-primary-soft" : "border-line bg-surface"
       }`}
     >
-      <span className="text-center text-2xl font-bold text-slate-400 lg:text-3xl">{entry.rank}</span>
+      <span className="text-center text-2xl font-extrabold text-ink-faint lg:text-3xl">{entry.rank}</span>
       <span className="flex min-w-0 items-center gap-2">
+        <Avatar avatar={entry.avatar} size={32} className="h-8 w-8 rounded-lg bg-sky-soft lg:h-16 lg:w-16" />
         <span className="truncate font-semibold">{entry.displayName}</span>
-        {entry.isMe && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">You</span>}
+        {entry.isMe && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-extrabold text-on-primary">You</span>}
         <RankChange delta={delta} />
       </span>
 
       {/* Phones: level on the right of the name line, stats on a second line. Large screens: one column each. */}
       <span className="text-right lg:order-last">
-        <span className="block font-bold">Lv {entry.level}</span>
-        <span className="block text-xs text-slate-500 lg:text-sm">{entry.points} pts</span>
+        <span className="block font-extrabold">Lv {entry.level}</span>
+        <span className="block text-xs text-ink-muted lg:text-sm">{entry.points} XP</span>
       </span>
-      <div className="col-span-2 col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 lg:contents lg:text-base lg:text-slate-700">
+      <div className="col-span-2 col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted lg:contents lg:text-base lg:text-ink">
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 lg:h-2 lg:w-full">
-            <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, entry.goalProgressPct)}%` }} />
+          <span className="w-20 lg:w-full">
+            <ProgressBar pct={entry.goalProgressPct} size="sm" label={`${entry.displayName}'s goal progress`} />
           </span>
           <span className="tabular-nums">{entry.goalProgressPct}%</span>
         </span>
         <span className="whitespace-nowrap">
           <span aria-hidden>🔥</span> {entry.streak}
-          <span className="text-slate-500"> wk</span>
+          <span className="text-ink-muted"> wk</span>
           <span className="sr-only"> {weeks} streak</span>
         </span>
         <span className="whitespace-nowrap">
@@ -109,7 +114,7 @@ function Row({ entry, delta, rowRef }: { entry: LeaderboardEntry; delta: number;
 
 function ColumnHeaders() {
   return (
-    <div className={`hidden gap-x-4 px-6 pb-2 text-sm font-semibold uppercase tracking-wide text-slate-400 lg:grid ${COLUMNS}`}>
+    <div className={`hidden gap-x-4 px-6 pb-2 text-sm font-semibold uppercase tracking-wide text-ink-faint lg:grid ${COLUMNS}`}>
       <span className="text-center">#</span>
       <span>Name</span>
       <span>Goal progress</span>
@@ -124,7 +129,7 @@ function SkeletonRows() {
   return (
     <ol className="space-y-2">
       {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm">
+        <li key={i} className="card flex items-center gap-4 p-4">
           <Skeleton className="h-6 w-6" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-5 w-1/3" />
@@ -240,7 +245,7 @@ export default function Leaderboard() {
           <button
             onClick={refresh}
             disabled={refreshing}
-            className="mt-1 shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            className="btn btn-secondary btn-sm mt-1 shrink-0"
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
@@ -253,7 +258,7 @@ export default function Leaderboard() {
             <button
               key={g.id}
               onClick={() => setGroupId(g.id)}
-              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${g.id === groupId ? "bg-slate-900 text-white" : "bg-white text-slate-600 shadow-sm"}`}
+              className={`shrink-0 rounded-full border-2 px-4 py-1.5 text-sm font-extrabold ${g.id === groupId ? "border-primary bg-primary text-on-primary" : "border-line bg-surface text-ink-muted"}`}
             >
               {g.name}
             </button>
@@ -267,24 +272,35 @@ export default function Leaderboard() {
 
       {status === "failed" && (
         <div className={`${cardClass} text-center`}>
-          <p className="text-slate-600">The leaderboard is taking a breather. Scores are safe.</p>
-          <button onClick={retry} className="mt-2 font-semibold text-emerald-600">
+          <p className="text-ink-muted">The leaderboard is taking a breather. Scores are safe.</p>
+          <button onClick={retry} className="mt-2 font-semibold text-link">
             Try again
           </button>
         </div>
       )}
 
       {status === "ready" && groups?.length === 0 && (
-        <div className={cardClass}>
-          <p className="text-slate-600">Join or start a group to see how you stack up with friends.</p>
-          <Link to="/group" className="mt-3 inline-block rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white">
-            Go to groups
-          </Link>
-        </div>
+        <EmptyState
+          mascot="coin"
+          title="No herd yet"
+          action={
+            <Link to="/group" className="btn btn-primary">
+              Go to groups
+            </Link>
+          }
+        >
+          Join or start a group to see how everyone's doing.
+        </EmptyState>
       )}
 
       {status === "ready" && data && (
         <>
+          <section className={`${cardClass} mb-6`}>
+            <h2 className="mb-1 text-lg font-extrabold">Herd progress</h2>
+            <p className="mb-3 text-sm text-ink-muted">How far everyone is toward their own goal, and their weekly streaks.</p>
+            <HerdChart entries={data.entries} />
+          </section>
+          <h2 className="mb-2 text-lg font-extrabold">Rankings</h2>
           <ColumnHeaders />
           <ol className="space-y-2">
             {data.entries.map((e) => (

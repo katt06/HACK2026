@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ContributionEntry, ExpenseEntry, GoalEntryDoc, ScoreDoc } from "../contract.js";
 import { addDays } from "./dates.js";
-import { balanceOn, zeroSafeToSaveDaysCounter } from "./safeToSaveHistory.js";
+import { balanceOn, safeToSaveHistory, safeToSaveOn, zeroSafeToSaveDaysCounter } from "./safeToSaveHistory.js";
 import {
   blendedScore,
+  coinsAfterChallenge,
   computeScore,
   goalProgressPct,
   improvementScore,
@@ -178,7 +179,24 @@ describe("progress, points and level", () => {
       baselineSpendByCategory: {},
       transactions: [],
     });
-    expect(score).toEqual({ userId: "u1", goalProgressPct: 15, streak: 3, improvementScore: 0, points: 175, level: 2 });
+    expect(score).toEqual({ userId: "u1", goalProgressPct: 15, streak: 3, improvementScore: 0, points: 175, level: 2, badges: ["first-float"] });
+  });
+
+  it("awards badges from the stats and keeps ones earned before", () => {
+    const base = { userId: "u1", today: TODAY, goals: [], baselineSpendByCategory: {}, transactions: [] };
+    expect(computeScore({ ...base, completedChallengePoints: Array(10).fill(30) }).badges).toEqual(["yuzu-master"]);
+    expect(computeScore({ ...base, completedChallengePoints: [], previousBadges: ["chill-streak"] }).badges).toEqual(["chill-streak"]);
+    expect(computeScore({ ...base, completedChallengePoints: [] }).badges).toEqual([]);
+  });
+});
+
+describe("coinsAfterChallenge", () => {
+  it("adds the challenge's points", () => {
+    expect(coinsAfterChallenge(120, 400, 50)).toBe(170);
+  });
+
+  it("starts untracked users with all their XP", () => {
+    expect(coinsAfterChallenge(undefined, 330, 30)).toBe(330);
   });
 });
 
@@ -206,6 +224,11 @@ describe("rankLeaderboard", () => {
     const allowed = ["userId", "displayName", "rank", "isMe", "goalProgressPct", "streak", "improvementScore", "points", "level"];
     expect(Object.keys(rankLeaderboard([leaky], "a")[0]).sort()).toEqual(allowed.sort());
   });
+
+  it("passes the equipped avatar through so the group can see it", () => {
+    const entry = rankLeaderboard([row("a", "Ana", { avatar: { hat: "straw-hat" } })], "a")[0];
+    expect(entry.avatar).toEqual({ hat: "straw-hat" });
+  });
 });
 
 describe("safe-to-save history", () => {
@@ -227,5 +250,20 @@ describe("safe-to-save history", () => {
     expect(broke(THIS_WEEK)).toBe(6); // Mon–Sat
     const flush = zeroSafeToSaveDaysCounter({ today: TODAY, currentBalance: 10_000_000, balanceAsOf: TODAY, transactions: [] });
     expect(flush(THIS_WEEK)).toBe(0);
+  });
+});
+
+describe("safeToSaveHistory", () => {
+  it("has one point per day ending today, with balances rebuilt from transactions", () => {
+    const input = {
+      today: TODAY,
+      currentBalance: 100_000,
+      balanceAsOf: TODAY,
+      transactions: [{ amount: 20_000, date: TODAY, merchant: "Rent", category: "rent" as const }],
+    };
+    const history = safeToSaveHistory(input, 3);
+    expect(history.map((p) => p.date)).toEqual([addDays(TODAY, -2), addDays(TODAY, -1), TODAY]);
+    expect(history.map((p) => p.balance)).toEqual([120_000, 120_000, 100_000]);
+    expect(history[2].amount).toBe(safeToSaveOn(TODAY, input));
   });
 });

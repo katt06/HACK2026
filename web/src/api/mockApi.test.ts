@@ -79,7 +79,7 @@ describe("getLeaderboard", () => {
     const { entries } = await api.getLeaderboard("g");
     expect(entries).toHaveLength(PERSONAS.length);
     expect(entries.map((e) => e.rank)).toEqual([1, 2, 3, 4, 5]);
-    const allowed = ["userId", "displayName", "rank", "isMe", "goalProgressPct", "streak", "improvementScore", "points", "level"].sort();
+    const allowed = ["userId", "displayName", "rank", "isMe", "goalProgressPct", "streak", "improvementScore", "points", "level", "avatar"].sort();
     for (const e of entries) {
       expect(Object.keys(e).sort()).toEqual(allowed);
       expect(e.level).toBe(levelFor(e.points));
@@ -257,5 +257,111 @@ describe("acceptChallenge", () => {
     expect((await api.getChallenges()).challenges.find((x) => x.id === c.id)?.status).toBe("accepted");
     expect((await api.completeChallenge(c.id)).challenge.status).toBe("completed");
     await expect(api.acceptChallenge(c.id)).rejects.toMatchObject({ code: "functions/not-found" });
+  });
+});
+
+describe("safe-to-save history and balance", () => {
+  it.each(PERSONAS.map((p) => p.id))("%s: 30 days ending at today's numbers, never negative", async (persona) => {
+    const { api } = setup({ settings: { persona } });
+    const res = await api.getSafeToSave();
+    const history = res.history!;
+    expect(history).toHaveLength(30);
+    expect(history.at(-1)).toEqual({ date: "2026-10-24", amount: res.amount, balance: res.breakdown.currentBalance });
+    expect(history.map((h) => h.date)).toEqual([...history.map((h) => h.date)].sort());
+    expect(history.every((h) => h.amount >= 0 && h.balance >= 0)).toBe(true);
+  });
+
+  it("is stable across calls", async () => {
+    const { api } = setup();
+    expect((await api.getSafeToSave()).history).toEqual((await api.getSafeToSave()).history);
+  });
+
+  it("adding money to a goal lowers the balance and what's left over", async () => {
+    const { api } = setup();
+    const before = await api.getSafeToSave();
+    const [goal] = await api.getMyGoals();
+    await api.addContribution(goal.id, 5000);
+    const after = await api.getSafeToSave();
+    expect(after.breakdown.currentBalance).toBe(before.breakdown.currentBalance - 5000);
+    expect(after.amount).toBe(before.amount - 5000);
+  });
+});
+
+describe("getGameState", () => {
+  it("starts Alex at level 3 with separate coins and two of three badges", async () => {
+    const { api } = setup();
+    const g = await api.getGameState();
+    expect(g).toMatchObject({ xp: 280, level: 3, xpIntoLevel: 80, xpPerLevel: 100, coins: 120 });
+    expect(g.badges.map((b) => [b.id, b.earned, b.progress])).toEqual([
+      ["first-float", true, 1],
+      ["chill-streak", true, 4],
+      ["yuzu-master", false, 8],
+    ]);
+  });
+
+  it("completing challenges earns XP and coins together, levels up, then unlocks Yuzu Master", async () => {
+    const { api } = setup();
+    const [a, b] = (await api.getChallenges()).challenges;
+    await api.completeChallenge(a.id);
+    const afterOne = await api.getGameState();
+    expect(afterOne).toMatchObject({ level: 4, xp: 280 + a.points, coins: 120 + a.points });
+    expect(afterOne.badges[2].earned).toBe(false);
+    await api.completeChallenge(b.id);
+    expect((await api.getGameState()).badges[2]).toMatchObject({ id: "yuzu-master", earned: true, progress: 10 });
+  });
+
+  it("Sam has First Float from the seeded goal but not Chill Streak yet", async () => {
+    const { api, controls } = setup();
+    controls.persona("subscription-creep");
+    const g = await api.getGameState();
+    expect(g.badges[0].earned).toBe(true); // seeded goal
+    expect(g.badges[1]).toMatchObject({ earned: false, progress: 1, goal: 4 });
+  });
+});
+
+describe("getActivity", () => {
+  it("has dated history for the calendar, and completing a challenge adds today", async () => {
+    const { api } = setup();
+    const before = await api.getActivity();
+    expect(before.completedChallenges).toHaveLength(8); // Alex has 8 lifetime completions
+    expect(before.completedChallenges.every((c) => new Date(c.completedAt) < NOW)).toBe(true);
+    expect(before.contributions).toHaveLength(3);
+    expect(before.streak).toBe(4);
+
+    const [first] = (await api.getChallenges()).challenges;
+    await api.completeChallenge(first.id);
+    const after = await api.getActivity();
+    expect(after.completedChallenges.at(-1)).toMatchObject({ id: first.id, completedAt: NOW.toISOString() });
+  });
+});
+
+describe("avatar shop", () => {
+  it("Alex starts with sunglasses on and 120 coins", async () => {
+    const { api } = setup();
+    expect(await api.getGameState()).toMatchObject({ coins: 120, owned: ["sunglasses"], avatar: { glasses: "sunglasses" } });
+  });
+
+  it("buys, equips, and shows the new look on the leaderboard and to the group", async () => {
+    const { api } = setup();
+    expect(await api.purchaseItem("yuzu-hat")).toEqual({ coins: 70, owned: ["sunglasses", "yuzu-hat"] });
+    expect(await api.equipItem("hat", "yuzu-hat")).toEqual({ avatar: { glasses: "sunglasses", hat: "yuzu-hat" } });
+    const me = (await api.getLeaderboard("g")).entries.find((e) => e.isMe)!;
+    expect(me.avatar).toEqual({ glasses: "sunglasses", hat: "yuzu-hat" });
+    expect((await api.getAvatars([me.userId]))[me.userId]).toEqual(me.avatar);
+    expect(await api.getGameState()).toMatchObject({ coins: 70, avatar: { hat: "yuzu-hat" } });
+  });
+
+  it("rejects buying without enough coins, buying twice, and equipping what you don't own", async () => {
+    const { api } = setup();
+    await expect(api.purchaseItem("tiny-crown")).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    await api.purchaseItem("matcha");
+    await expect(api.purchaseItem("matcha")).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    await expect(api.equipItem("hat", "straw-hat")).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    expect((await api.getGameState()).coins).toBe(80);
+  });
+
+  it("takes an item off", async () => {
+    const { api } = setup();
+    expect(await api.equipItem("glasses", null)).toEqual({ avatar: {} });
   });
 });

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import type { GroupSummary } from "@contract";
+import type { EquippedAvatar, GroupSummary } from "@contract";
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { JoinGroupForm } from "../components/JoinGroupForm";
+import { EmptyState } from "../components/EmptyState";
+import { Avatar } from "../avatar/Avatar";
 import { inviteLink } from "../lib/inviteCode";
 
-const card = "rounded-3xl bg-white p-5 shadow-sm lg:p-8";
+const card = "card p-5 lg:p-8";
 
 function InviteBox({ group }: { group: GroupSummary }) {
   const [copied, setCopied] = useState(false);
@@ -31,23 +33,23 @@ function InviteBox({ group }: { group: GroupSummary }) {
   }
 
   return (
-    <div className="rounded-2xl bg-emerald-50 p-4 lg:p-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Invite code</p>
-      <p className="mt-1 font-mono text-3xl font-bold tracking-[0.3em] text-emerald-900 lg:text-5xl">{group.inviteCode}</p>
-      <p className="mt-2 truncate text-sm text-emerald-800">{link}</p>
-      <button onClick={share} className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+    <div className="rounded-2xl bg-primary-soft p-4 lg:p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-link">Invite code</p>
+      <p className="mt-1 font-mono text-3xl font-extrabold tracking-[0.3em] text-heading lg:text-5xl">{group.inviteCode}</p>
+      <p className="mt-2 truncate text-sm text-heading">{link}</p>
+      <button onClick={share} className="btn btn-primary btn-sm mt-3">
         {copied ? "Link copied!" : "Share invite link"}
       </button>
     </div>
   );
 }
 
-function GroupCard({ group, fresh }: { group: GroupSummary; fresh: Set<string> }) {
+function GroupCard({ group, fresh, avatars }: { group: GroupSummary; fresh: Set<string>; avatars: Record<string, EquippedAvatar> }) {
   return (
     <section className={card}>
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-xl font-bold lg:text-2xl">{group.name}</h2>
-        <span className="shrink-0 text-sm text-slate-500">
+        <h2 className="text-xl font-extrabold lg:text-2xl">{group.name}</h2>
+        <span className="shrink-0 text-sm text-ink-muted">
           {group.members.length} {group.members.length === 1 ? "member" : "members"}
         </span>
       </div>
@@ -56,13 +58,11 @@ function GroupCard({ group, fresh }: { group: GroupSummary; fresh: Set<string> }
           {group.members.map((m) => (
             <li
               key={m.userId}
-              className={`-mx-2 flex items-center gap-3 rounded-xl px-2 py-1 transition-colors duration-1000 ${fresh.has(m.userId) ? "bg-emerald-100" : ""}`}
+              className={`-mx-2 flex items-center gap-3 rounded-xl px-2 py-1 transition-colors duration-1000 ${fresh.has(m.userId) ? "bg-primary-soft" : ""}`}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 font-semibold text-slate-600">
-                {m.displayName.charAt(0).toUpperCase()}
-              </span>
+              <Avatar avatar={avatars[m.userId]} size={32} className="rounded-lg bg-sky-soft" />
               <span className="font-medium">{m.displayName}</span>
-              {m.isMe && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">You</span>}
+              {m.isMe && <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-extrabold text-heading">You</span>}
             </li>
           ))}
         </ul>
@@ -100,10 +100,10 @@ function CreateGroupForm({ onCreated }: { onCreated: (g: GroupSummary) => void }
         maxLength={40}
         placeholder="Roommates, Book club, …"
         aria-label="Group name"
-        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+        className="field"
       />
-      {error && <p className="text-sm text-rose-600">{error}</p>}
-      <button type="submit" disabled={busy} className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <button type="submit" disabled={busy} className="btn btn-secondary w-full">
         {busy ? "Creating…" : "Create group"}
       </button>
     </form>
@@ -117,8 +117,16 @@ export default function Group() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [fresh, setFresh] = useState<Set<string>>(new Set()); // userIds that just joined
+  const [avatars, setAvatars] = useState<Record<string, EquippedAvatar>>({});
   const previous = useRef<GroupSummary[] | null>(null);
   const [notice, setNotice] = useState<string>((location.state as { notice?: string } | null)?.notice ?? "");
+
+  // Everyone's capybara. Refetched when the member list changes; missing ones just show the default look.
+  const memberKey = [...new Set(groups?.flatMap((g) => g.members.map((m) => m.userId)) ?? [])].sort().join(",");
+  useEffect(() => {
+    if (!memberKey) return;
+    api.getAvatars(memberKey.split(",")).then(setAvatars, (err) => console.error(err));
+  }, [memberKey]);
 
   // Live member list: announce and briefly highlight anyone who joins one of my groups.
   useEffect(() => {
@@ -151,7 +159,7 @@ export default function Group() {
       <PageHeader title="Groups" subtitle="Save alongside friends. They see your progress, never your dollars." />
 
       {notice && (
-        <p role="status" className="mb-4 rounded-2xl bg-emerald-600 px-4 py-3 font-medium text-white">
+        <p role="status" className="mb-4 rounded-2xl border-2 border-mint bg-primary-soft px-4 py-3 font-extrabold text-heading">
           {notice}
         </p>
       )}
@@ -159,25 +167,27 @@ export default function Group() {
       <div className="space-y-4">
         {loadFailed && (
           <div className={`${card} text-center`}>
-            <p className="text-slate-600">Couldn't load your groups.</p>
-            <button onClick={() => setRetry((n) => n + 1)} className="mt-2 font-semibold text-emerald-600">
+            <p className="text-ink-muted">Couldn't load your groups.</p>
+            <button onClick={() => setRetry((n) => n + 1)} className="mt-2 font-semibold text-link">
               Try again
             </button>
           </div>
         )}
-        {!groups && !loadFailed && <div className={`${card} animate-pulse text-slate-400`}>Loading your groups…</div>}
+        {!groups && !loadFailed && <div className={`${card} animate-pulse text-ink-faint`}>Loading your groups…</div>}
         {groups?.length === 0 && (
-          <p className={`${card} text-slate-600`}>You're not in a group yet. Start one below, or join a friend's with their code.</p>
+          <EmptyState mascot="drink" title="Saving's better together">
+            Start a group below, or join a friend's with their code.
+          </EmptyState>
         )}
-        {groups?.map((g) => <GroupCard key={g.id} group={g} fresh={fresh} />)}
+        {groups?.map((g) => <GroupCard key={g.id} group={g} fresh={fresh} avatars={avatars} />)}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <section className={card}>
-            <h2 className="mb-3 text-lg font-bold">Start a group</h2>
+            <h2 className="mb-3 text-lg font-extrabold">Start a group</h2>
             <CreateGroupForm onCreated={(g) => setNotice(`${g.name} is ready. Share the code to invite friends.`)} />
           </section>
           <section className={card}>
-            <h2 className="mb-3 text-lg font-bold">Join with a code</h2>
+            <h2 className="mb-3 text-lg font-extrabold">Join with a code</h2>
             <JoinGroupForm
               onJoined={({ group, alreadyMember }) => {
                 setNotice(alreadyMember ? `You're already in ${group.name}.` : `You joined ${group.name}!`);

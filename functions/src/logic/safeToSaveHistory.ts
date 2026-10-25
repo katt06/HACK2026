@@ -1,10 +1,10 @@
 // Past safe-to-save amounts, rebuilt from today's balance and the transaction history (nothing is logged).
-import type { Cents, IsoDate } from "../contract.js";
+import type { Cents, IsoDate, SafeToSaveHistoryPoint } from "../contract.js";
 import { addDays } from "./dates.js";
 import { forecastSafeToSave } from "./forecast.js";
 import type { TransactionLike } from "./recurring.js";
 
-const FORECAST_HISTORY_DAYS = 120; // same window the getSafeToSave callable loads
+export const FORECAST_HISTORY_DAYS = 120; // same window the getSafeToSave callable loads
 
 export interface BalanceHistoryInput {
   today: IsoDate;
@@ -22,6 +22,15 @@ export function safeToSaveOn(date: IsoDate, input: BalanceHistoryInput): Cents {
   const from = addDays(date, -FORECAST_HISTORY_DAYS);
   const transactions = input.transactions.filter((t) => t.date >= from && t.date <= date);
   return forecastSafeToSave({ today: date, currentBalance: balanceOn(date, input), transactions }).amount;
+}
+
+// The dashboard's "left over" track record: one end-of-day point per day, oldest first, ending today.
+// Needs transactions from FORECAST_HISTORY_DAYS before the first day.
+export function safeToSaveHistory(input: BalanceHistoryInput, days = 30): SafeToSaveHistoryPoint[] {
+  return Array.from({ length: days }, (_, i) => {
+    const date = addDays(input.today, i - days + 1);
+    return { date, amount: safeToSaveOn(date, input), balance: balanceOn(date, input) };
+  });
 }
 
 // For weeklyStreak: how many days in the week starting weekStart (up to today) had $0 safe to save.

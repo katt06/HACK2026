@@ -1,12 +1,12 @@
-// Why trust the remaining-money number? Show how it would have done: a weekly history of the amount, and a
-// backtest of moving it on each recent payday. Each past amount only uses data available on that day.
-import type { IsoDate, RemainingMoneyPoint, TrackRecord } from "../contract.js";
+// Why trust the remaining-money number? Backtest it: what would have happened if the user had moved the
+// suggested amount on each recent payday. Each past amount only uses data available on that day.
+// (The daily history chart is safeToSaveHistory in safeToSaveHistory.ts.)
+import type { IsoDate, TrackRecord } from "../contract.js";
 import { addDays, formatMonthDay } from "./dates.js";
 import { formatCents } from "./money.js";
 import { categorize, detectRecurring, seriesKey } from "./recurring.js";
 import { balanceOn, safeToSaveOn, type BalanceHistoryInput } from "./safeToSaveHistory.js";
 
-export const HISTORY_WEEKS = 12;
 export const MAX_CHECKS = 12;
 // Monthly bills only count as recurring after 3 charges, so the forecast can't know them before ~3 months
 // of history. The backtest starts after that rather than blaming the forecast for a cold start.
@@ -17,18 +17,6 @@ function earliestUsableDate(input: BalanceHistoryInput): IsoDate | null {
   if (input.transactions.length === 0) return null;
   const first = input.transactions.reduce((min, t) => (t.date < min ? t.date : min), input.transactions[0].date);
   return addDays(first, MIN_HISTORY_DAYS);
-}
-
-// Remaining money on the same weekday for the last 12 weeks, oldest first.
-export function remainingMoneyHistory(input: BalanceHistoryInput, weeks = HISTORY_WEEKS): RemainingMoneyPoint[] {
-  const earliest = earliestUsableDate(input);
-  if (!earliest) return [];
-  const points: RemainingMoneyPoint[] = [];
-  for (let week = weeks - 1; week >= 0; week--) {
-    const date = addDays(input.today, -7 * week);
-    if (date >= earliest) points.push({ date, amount: safeToSaveOn(date, input) });
-  }
-  return points;
 }
 
 // Past paydays (when a recurring paycheck landed), or every two weeks for irregular income.

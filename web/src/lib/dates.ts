@@ -20,3 +20,14 @@ export function daysBetween(from: IsoDate, to: IsoDate): number {
 export function addDays(iso: IsoDate, days: number): IsoDate {
   return new Date(toUtc(iso) + days * DAY_MS).toISOString().slice(0, 10);
 }
+
+// Monday of the week containing iso (weeks run Mon–Sun, same as the server's streaks).
+export function startOfWeek(iso: IsoDate): IsoDate {
+  const weekday = (new Date(toUtc(iso)).getUTCDay() + 6) % 7; // Mon = 0
+  return addDays(iso, -weekday);
+}
+
+// The local calendar day of a stored timestamp ("2026-10-24T03:00:00Z" → "2026-10-23" in California).
+export function localDate(isoDateTime: string): IsoDate {
+  return todayIso(new Date(isoDateTime));
+}

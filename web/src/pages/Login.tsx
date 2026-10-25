@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { FirebaseError } from "firebase/app";
 import { useAuth } from "../auth/AuthContext";
+import { LogoWordmark } from "../components/Logo";
 
 const FRIENDLY: Record<string, string> = {
   "auth/invalid-credential": "That email and password don't match.",
@@ -48,61 +49,68 @@ export default function Login() {
     run(() => (mode === "signin" ? signInWithEmail(email, password) : signUpWithEmail(email, password, name.trim())));
   }
 
-  const input = "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200";
+  const input = "field";
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
-      <div className="w-full max-w-sm">
-        <h1 className="text-center text-3xl font-bold text-emerald-600">Savings Game</h1>
-        <p className="mt-2 text-center text-slate-500">Save with friends. One small challenge at a time.</p>
-
-        <button
-          onClick={() => run(signInWithGoogle)}
-          disabled={busy}
-          className="mt-8 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium hover:bg-slate-50 disabled:opacity-50"
-        >
-          Continue with Google
-        </button>
-
-        <div className="my-6 flex items-center gap-3 text-xs text-slate-400">
-          <div className="h-px flex-1 bg-slate-200" />
-          or
-          <div className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-3">
-          {mode === "signup" && (
-            <input className={input} placeholder="Your first name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" />
-          )}
-          <input className={input} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
-          <input
-            className={input}
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            required
-          />
-          {error && <p className="text-sm text-rose-600">{error}</p>}
-          <button type="submit" disabled={busy} className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-            {mode === "signin" ? "Sign in" : "Create account"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-500">
-          {mode === "signin" ? "New here? " : "Already have an account? "}
-          <button
-            onClick={() => {
-              setMode(mode === "signin" ? "signup" : "signin");
-              setError("");
-            }}
-            className="font-medium text-emerald-600"
-          >
-            {mode === "signin" ? "Create an account" : "Sign in"}
-          </button>
+    <div className="min-h-dvh lg:grid lg:grid-cols-2">
+      {/* Hero: brand art always sits on light cream/sky, so it reads the same in dark mode. */}
+      <section className="relative flex flex-col items-center justify-center overflow-hidden bg-cream px-6 pt-8 pb-6 lg:min-h-dvh lg:py-12">
+        <LogoWordmark className="relative h-24 lg:h-36" />
+        <img src="/brand/mascot-coin.png" alt="" className="relative mt-2 h-40 object-contain lg:mt-6 lg:h-80" />
+        <p className="relative mt-3 max-w-xs text-center text-lg font-extrabold text-forest lg:max-w-sm lg:text-2xl">
+          Save with friends. Nice and steady.
         </p>
-      </div>
+      </section>
+
+      <section className="flex items-start justify-center px-4 py-8 lg:items-center lg:py-12">
+        <div className="w-full max-w-sm">
+          <h1 className="text-center text-3xl font-black tracking-tight">{mode === "signin" ? "Welcome back" : "Join the herd"}</h1>
+          <p className="mt-1 text-center text-ink-muted">One small challenge at a time.</p>
+
+          <button onClick={() => run(signInWithGoogle)} disabled={busy} className="btn btn-secondary mt-6 w-full">
+            Continue with Google
+          </button>
+
+          <div className="my-5 flex items-center gap-3 text-xs font-extrabold uppercase tracking-wide text-ink-faint">
+            <div className="h-0.5 flex-1 rounded bg-line" />
+            or
+            <div className="h-0.5 flex-1 rounded bg-line" />
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-3">
+            {mode === "signup" && (
+              <input className={input} placeholder="Your first name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" />
+            )}
+            <input className={input} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+            <input
+              className={input}
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              required
+            />
+            {error && <p className="text-sm text-danger">{error}</p>}
+            <button type="submit" disabled={busy} className="btn btn-primary btn-lg w-full">
+              {mode === "signin" ? "Sign in" : "Create account"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-ink-muted">
+            {mode === "signin" ? "New here? " : "Already have an account? "}
+            <button
+              onClick={() => {
+                setMode(mode === "signin" ? "signup" : "signin");
+                setError("");
+              }}
+              className="font-extrabold text-link underline-offset-2 hover:underline"
+            >
+              {mode === "signin" ? "Create an account" : "Sign in"}
+            </button>
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

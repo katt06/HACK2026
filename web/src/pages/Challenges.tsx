@@ -1,25 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ChallengeDoc, ScoreDoc, WithId } from "@contract";
+import type { ChallengeDoc, WithId } from "@contract";
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { Difficulty } from "../components/Difficulty";
+import { EmptyState } from "../components/EmptyState";
 import { cardClass } from "../components/forms";
 import { PointsBurst } from "../components/PointsBurst";
 import { Skeleton } from "../components/Skeleton";
 import { useCooldown } from "../lib/useCooldown";
-import { useCountUp } from "../lib/useCountUp";
+import { useGame } from "../game/GameContext";
+import { LevelBar } from "../game/LevelBar";
 
 const REFRESH_COOLDOWN_MS = 30_000;
 
 type Challenge = WithId<ChallengeDoc>;
 
-function ScorePill({ score }: { score: ScoreDoc | null }) {
-  const points = useCountUp(score?.points ?? 0);
-  if (!score) return null;
+function LevelCard() {
+  const { state } = useGame();
+  if (!state) return null;
   return (
-    <div className="rounded-2xl bg-white px-4 py-2 text-right shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Level {score.level}</p>
-      <p className="text-xl font-bold tabular-nums text-emerald-600 lg:text-2xl">{points} pts</p>
+    <div className="card w-44 shrink-0 px-4 py-3 lg:w-64">
+      <LevelBar level={state.level} xpIntoLevel={state.xpIntoLevel} xpPerLevel={state.xpPerLevel} compact />
     </div>
   );
 }
@@ -53,12 +54,12 @@ function ChallengeCard({
   }
 
   return (
-    <li className={`relative flex flex-col rounded-3xl p-5 shadow-sm transition-colors lg:p-6 ${done ? "bg-emerald-50 ring-2 ring-emerald-500" : "bg-white"}`}>
+    <li className={`relative flex flex-col rounded-2xl border-2 p-5 transition-colors lg:p-6 ${done ? "border-leaf bg-primary-soft" : "border-line bg-surface"}`}>
       {burstKey !== undefined && <PointsBurst key={burstKey} points={challenge.points} />}
 
       <div className="flex items-center justify-between">
         <Difficulty level={challenge.difficulty} />
-        <span className="text-sm font-bold text-emerald-600">+{challenge.points} pts</span>
+        <span className="text-sm font-extrabold text-link">+{challenge.points} XP</span>
       </div>
 
       <p className="mt-3 flex-1 text-lg font-semibold leading-snug lg:text-xl">{challenge.description}</p>
@@ -66,22 +67,22 @@ function ChallengeCard({
       <button
         onClick={() => setShowWhy(!showWhy)}
         aria-expanded={showWhy}
-        className="mt-3 self-start text-sm font-semibold text-slate-500 hover:text-slate-800"
+        className="mt-3 self-start text-sm font-semibold text-ink-muted hover:text-ink"
       >
         Why this challenge? <span aria-hidden>{showWhy ? "▴" : "▾"}</span>
       </button>
-      {showWhy && <p className="mt-1 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{challenge.reason}</p>}
+      {showWhy && <p className="mt-1 rounded-xl bg-surface-2 p-3 text-sm text-ink-muted">{challenge.reason}</p>}
 
       <div className="mt-4">
         {done ? (
-          <p className="rounded-xl bg-emerald-600 px-4 py-3 text-center font-semibold text-white">Done! +{challenge.points} pts</p>
+          <p className="rounded-2xl bg-coin px-4 py-3 text-center font-extrabold text-on-coin">Done! +{challenge.points} XP</p>
         ) : challenge.status === "accepted" ? (
           <div className="space-y-2">
-            <p className="text-center text-xs font-semibold uppercase tracking-wide text-emerald-700">You're in</p>
+            <p className="text-center text-xs font-semibold uppercase tracking-wide text-link">You're in</p>
             <button
               onClick={() => run(onComplete)}
               disabled={busy}
-              className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="btn btn-coin w-full"
             >
               {busy ? "Saving…" : "Mark complete"}
             </button>
@@ -90,12 +91,12 @@ function ChallengeCard({
           <button
             onClick={() => run(onAccept)}
             disabled={busy}
-            className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+            className="btn btn-primary w-full"
           >
             {busy ? "Saving…" : "Accept challenge"}
           </button>
         )}
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </div>
     </li>
   );
@@ -103,7 +104,7 @@ function ChallengeCard({
 
 export default function Challenges() {
   const [challenges, setChallenges] = useState<Challenge[] | null>(null);
-  const [score, setScore] = useState<ScoreDoc | null>(null);
+  const game = useGame();
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [bursts, setBursts] = useState<Record<string, number>>({});
   const [notice, setNotice] = useState("");
@@ -112,10 +113,9 @@ export default function Challenges() {
   const load = useCallback(() => {
     setStatus("loading");
     setBursts({});
-    Promise.all([api.getChallenges(), api.getMyScore().catch(() => null)]).then(
-      ([res, myScore]) => {
+    api.getChallenges().then(
+      (res) => {
         setChallenges(res.challenges);
-        setScore(myScore);
         setStatus("ready");
       },
       (err) => {
@@ -137,9 +137,9 @@ export default function Challenges() {
   async function complete(c: Challenge) {
     const res = await api.completeChallenge(c.id);
     replace(res.challenge);
-    setScore(res.score);
     setBursts((b) => ({ ...b, [c.id]: Date.now() }));
-    setNotice(res.leveledUp ? `Level ${res.score.level}! You earned ${res.pointsAwarded} points.` : `Nice! +${res.pointsAwarded} points.`);
+    setNotice(`Nice and steady. +${res.pointsAwarded} XP and +${res.pointsAwarded} coins.`);
+    void game.refresh(); // coin counter, level bar, and any level-up or badge celebration
   }
 
   function refresh() {
@@ -155,12 +155,12 @@ export default function Challenges() {
     <>
       <div className="flex items-start justify-between gap-4">
         <PageHeader title="Challenges" subtitle="Small wins that add up." />
-        <ScorePill score={score} />
+        <LevelCard />
       </div>
 
       <div className="mb-4 flex items-center justify-between gap-3">
         {notice ? (
-          <p role="status" className="rounded-xl bg-emerald-600 px-4 py-2 font-medium text-white">
+          <p role="status" className="rounded-2xl border-2 border-mint bg-primary-soft px-4 py-2 font-extrabold text-heading">
             {notice}
           </p>
         ) : (
@@ -169,7 +169,7 @@ export default function Challenges() {
         <button
           onClick={refresh}
           disabled={cooldown.secondsLeft > 0 || status === "loading"}
-          className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:text-slate-400"
+          className="btn btn-secondary btn-sm shrink-0"
         >
           {cooldown.secondsLeft > 0 ? `Refresh in ${cooldown.secondsLeft}s` : "Refresh"}
         </button>
@@ -178,7 +178,7 @@ export default function Challenges() {
       {status === "loading" && (
         <ul className="grid gap-4 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <li key={i} className="space-y-3 rounded-3xl bg-white p-5 shadow-sm">
+            <li key={i} className="card space-y-3 p-5">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="h-6 w-full" />
               <Skeleton className="h-6 w-2/3" />
@@ -190,8 +190,8 @@ export default function Challenges() {
 
       {status === "failed" && (
         <div className={`${cardClass} text-center`}>
-          <p className="text-slate-600">New challenges are on their way. Check back in a moment.</p>
-          <button onClick={load} className="mt-2 font-semibold text-emerald-600">
+          <p className="text-ink-muted">New challenges are on their way. Check back in a moment.</p>
+          <button onClick={load} className="mt-2 font-semibold text-link">
             Try again
           </button>
         </div>
@@ -200,12 +200,10 @@ export default function Challenges() {
       {status === "ready" && challenges && (
         <>
           {open.length === 0 && (
-            <div className={`${cardClass} mb-4 text-center`}>
-              <p className="text-4xl" aria-hidden>
-                🎉
-              </p>
-              <p className="mt-2 text-lg font-semibold">You've cleared your challenges.</p>
-              <p className="text-slate-500">New ones show up as your spending changes. Check back later or tap Refresh.</p>
+            <div className="mb-4">
+              <EmptyState mascot="float" title="All done. Time to chill.">
+                New challenges show up as your spending changes. Check back later or tap Refresh.
+              </EmptyState>
             </div>
           )}
           {challenges.length > 0 && (

@@ -4,6 +4,7 @@ import {
   addDoc,
   collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   increment,
@@ -14,8 +15,13 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import {
+  DEFAULT_AVATAR,
+  evaluateBadges,
+  ownedItems,
+  levelProgress,
   toGroupSummary,
   type CallableName,
+  type ChallengeDoc,
   type Callables,
   type ContributionEntry,
   type ExpenseEntry,
@@ -23,6 +29,7 @@ import {
   type GoalEntryDoc,
   type GroupDoc,
   type ScoreDoc,
+  type UserDoc,
 } from "@contract";
 import { auth, db, functions } from "../firebase";
 import { generateInviteCode } from "../lib/inviteCode";
@@ -52,6 +59,64 @@ export const realApi: Api = {
   acceptChallenge: (challengeId) => call("acceptChallenge", { challengeId }),
   completeChallenge: (challengeId) => call("completeChallenge", { challengeId }),
   getLeaderboard: (groupId) => call("getLeaderboard", { groupId }),
+  // Built from data the client may already read. Coins fall back to XP until the server tracks spending,
+  // and badges combine what the server has awarded with what the stats show.
+  async getGameState() {
+    const { uid } = signedInUser();
+    const [scoreSnap, userSnap, goals, completed] = await Promise.all([
+      getDoc(doc(db, "scores", uid)),
+      getDoc(doc(db, "users", uid)),
+      getDocs(query(collection(db, "goals"), where("ownerId", "==", uid))),
+      getCountFromServer(query(collection(db, "challenges"), where("userId", "==", uid), where("status", "==", "completed")))
+        .then((c) => c.data().count)
+        .catch(() => 0),
+    ]);
+    const score = scoreSnap.exists() ? (scoreSnap.data() as ScoreDoc) : null;
+    const xp = score?.points ?? 0;
+    return {
+      xp,
+      ...levelProgress(xp),
+      coins: (userSnap.exists() ? (userSnap.data() as UserDoc).coins : undefined) ?? xp,
+      badges: evaluateBadges({ goalsCreated: goals.size, streak: score?.streak ?? 0, challengesCompleted: completed }, score?.badges ?? []),
+      avatar: score?.avatar ?? DEFAULT_AVATAR,
+      owned: ownedItems(userSnap.exists() ? (userSnap.data() as UserDoc).inventory : []),
+    };
+  },
+  // All of this is my own data, which rules let me read directly.
+  async getActivity() {
+    const { uid } = signedInUser();
+    const [challenges, goals, scoreSnap] = await Promise.all([
+      getDocs(query(collection(db, "challenges"), where("userId", "==", uid), where("status", "==", "completed"))),
+      getDocs(query(collection(db, "goals"), where("ownerId", "==", uid))),
+      getDoc(doc(db, "scores", uid)),
+    ]);
+    const entries = await Promise.all(
+      goals.docs.map(async (g) => {
+        const snap = await getDocs(query(collection(g.ref, "entries"), where("kind", "==", "contribution")));
+        return snap.docs.map((d) => ({ goalName: (g.data() as GoalDoc).name, ...(d.data() as ContributionEntry) }));
+      }),
+    );
+    return {
+      completedChallenges: challenges.docs
+        .map((d) => ({ id: d.id, ...(d.data() as ChallengeDoc) }))
+        .filter((c) => c.completedAt)
+        .map((c) => ({ id: c.id, description: c.description, points: c.points, completedAt: c.completedAt! })),
+      contributions: entries.flat().map((e) => ({ goalName: e.goalName, amount: e.amount, createdAt: e.createdAt })),
+      streak: scoreSnap.exists() ? (scoreSnap.data() as ScoreDoc).streak : 0,
+    };
+  },
+  purchaseItem: (itemId) => call("purchaseItem", { itemId }),
+  equipItem: (slot, itemId) => call("equipItem", { slot, itemId }),
+  // Rules let group members get each other's score doc, which is where the avatar lives.
+  async getAvatars(uids) {
+    const entries = await Promise.all(
+      uids.map(async (uid) => {
+        const snap = await getDoc(doc(db, "scores", uid)).catch(() => null);
+        return [uid, (snap?.data() as ScoreDoc | undefined)?.avatar ?? DEFAULT_AVATAR] as const;
+      }),
+    );
+    return Object.fromEntries(entries);
+  },
   async getMyScore() {
     const snap = await getDoc(doc(db, "scores", signedInUser().uid));
     return snap.exists() ? (snap.data() as ScoreDoc) : null;

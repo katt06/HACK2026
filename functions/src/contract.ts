@@ -81,6 +81,11 @@ export interface UserDoc {
   displayName: string;
   baselineSpendByCategory: Partial<Record<Category, Cents>>; // typical monthly spend
   settings: UserSettings;
+  // Spendable shop currency (server-written; private to the user). Coins are earned 1:1 with XP but can go
+  // down when spent. Until the server tracks it, clients treat a missing value as "all XP, nothing spent".
+  coins?: number;
+  // Shop items bought (server-written; private). Starter items are always owned and aren't listed here.
+  inventory?: ItemId[];
 }
 
 // goals/{id}
@@ -272,8 +277,56 @@ export interface ScoreDoc {
   // week where safe-to-save was $0 on more than 4 days, pause the streak instead of breaking it.
   streak: number;
   improvementScore: number; // 0–100: % drop in discretionary spend (last 30 days) vs. baseline
-  points: number;
+  points: number; // XP: never decreases; drives level and leaderboard rank
   level: number; // starts at 1
+  badges?: BadgeId[]; // earned badges (server-written; badges stay earned even if a streak later breaks)
+  avatar?: EquippedAvatar; // what the capybara is wearing, shown to the group (server-written); missing = DEFAULT_AVATAR
+}
+
+// ---------- Game layer: levels and badges ----------
+
+export const XP_PER_LEVEL = 100; // same as POINTS_PER_LEVEL in logic/scoring.ts
+
+export function levelProgress(xp: number): { level: number; xpIntoLevel: number; xpPerLevel: number } {
+  const safe = Math.max(0, Math.floor(xp));
+  return { level: Math.floor(safe / XP_PER_LEVEL) + 1, xpIntoLevel: safe % XP_PER_LEVEL, xpPerLevel: XP_PER_LEVEL };
+}
+
+export type BadgeId = "first-float" | "chill-streak" | "yuzu-master";
+
+export const BADGES: Record<BadgeId, { name: string; hint: string; goal: number; unit: string }> = {
+  "first-float": { name: "First Float", hint: "Create your first goal", goal: 1, unit: "goal" },
+  "chill-streak": { name: "Chill Streak", hint: "Keep a 4-week saving streak", goal: 4, unit: "weeks" },
+  "yuzu-master": { name: "Yuzu Master", hint: "Complete 10 challenges", goal: 10, unit: "challenges" },
+};
+
+export const BADGE_ORDER: BadgeId[] = ["first-float", "chill-streak", "yuzu-master"];
+
+export interface BadgeStats {
+  goalsCreated: number;
+  streak: number; // weeks
+  challengesCompleted: number;
+}
+
+export interface BadgeProgress {
+  id: BadgeId;
+  earned: boolean;
+  progress: number; // capped at goal
+  goal: number;
+}
+
+// A badge is earned once its stat reaches the goal, and stays earned if it was earned before.
+export function evaluateBadges(stats: BadgeStats, alreadyEarned: readonly BadgeId[] = []): BadgeProgress[] {
+  const value: Record<BadgeId, number> = {
+    "first-float": stats.goalsCreated,
+    "chill-streak": stats.streak,
+    "yuzu-master": stats.challengesCompleted,
+  };
+  return BADGE_ORDER.map((id) => {
+    const goal = BADGES[id].goal;
+    const earned = alreadyEarned.includes(id) || value[id] >= goal;
+    return { id, earned, progress: earned ? goal : Math.min(goal, value[id]), goal };
+  });
 }
 
 // rateLimits/{uid} (server-only): LLM calls in the last hour, for the per-user limit.
@@ -285,6 +338,60 @@ export interface RateLimitDoc {
 // Kept in sync from groups/* so security rules can check score access with a single get().
 export interface ScoreViewersDoc {
   uids: string[];
+}
+
+// ---------- Avatar shop ----------
+
+export type AvatarSlot = "outfit" | "hat" | "glasses" | "held";
+export const AVATAR_SLOTS: readonly AvatarSlot[] = ["outfit", "hat", "glasses", "held"];
+
+export type ItemId = "sunglasses" | "yuzu-hat" | "straw-hat" | "scarf" | "matcha" | "bubble-tea" | "flower-crown" | "tiny-crown";
+
+// Prices live here so the server, not the client, decides what things cost. The pixel art is in web/src/avatar.
+export const SHOP_ITEMS: Record<ItemId, { name: string; slot: AvatarSlot; price: number }> = {
+  sunglasses: { name: "Sunglasses", slot: "glasses", price: 0 },
+  "yuzu-hat": { name: "Yuzu hat", slot: "hat", price: 50 },
+  "straw-hat": { name: "Straw hat", slot: "hat", price: 80 },
+  scarf: { name: "Scarf", slot: "outfit", price: 60 },
+  matcha: { name: "Matcha drink", slot: "held", price: 40 },
+  "bubble-tea": { name: "Bubble tea", slot: "held", price: 40 },
+  "flower-crown": { name: "Flower crown", slot: "hat", price: 100 },
+  "tiny-crown": { name: "Tiny crown", slot: "hat", price: 250 },
+};
+export const ITEM_ORDER = Object.keys(SHOP_ITEMS) as ItemId[];
+
+export const STARTER_ITEMS: readonly ItemId[] = ["sunglasses"]; // free and always owned
+export type EquippedAvatar = Partial<Record<AvatarSlot, ItemId>>;
+export const DEFAULT_AVATAR: EquippedAvatar = { glasses: "sunglasses" }; // matches the mascot
+
+export const isItemId = (v: unknown): v is ItemId => typeof v === "string" && v in SHOP_ITEMS;
+export const isAvatarSlot = (v: unknown): v is AvatarSlot => typeof v === "string" && (AVATAR_SLOTS as readonly string[]).includes(v);
+
+export function ownedItems(inventory: readonly ItemId[] = []): ItemId[] {
+  return ITEM_ORDER.filter((id) => STARTER_ITEMS.includes(id) || inventory.includes(id));
+}
+
+export type PurchaseCheck = { ok: true; coins: number; inventory: ItemId[] } | { ok: false; reason: "owned" | "insufficient-coins" };
+
+// The purchase rules, shared by the purchaseItem callable and the mock so they can't disagree.
+export function checkPurchase(coins: number, inventory: readonly ItemId[] = [], itemId: ItemId): PurchaseCheck {
+  if (ownedItems(inventory).includes(itemId)) return { ok: false, reason: "owned" };
+  const price = SHOP_ITEMS[itemId].price;
+  if (coins < price) return { ok: false, reason: "insufficient-coins" };
+  return { ok: true, coins: coins - price, inventory: [...inventory, itemId] };
+}
+
+export type EquipCheck = { ok: true; avatar: EquippedAvatar } | { ok: false; reason: "not-owned" | "wrong-slot" };
+
+// itemId null takes off whatever is in that slot.
+export function checkEquip(avatar: EquippedAvatar, inventory: readonly ItemId[] = [], slot: AvatarSlot, itemId: ItemId | null): EquipCheck {
+  if (itemId === null) {
+    const { [slot]: _, ...rest } = avatar;
+    return { ok: true, avatar: rest };
+  }
+  if (SHOP_ITEMS[itemId].slot !== slot) return { ok: false, reason: "wrong-slot" };
+  if (!ownedItems(inventory).includes(itemId)) return { ok: false, reason: "not-owned" };
+  return { ok: true, avatar: { ...avatar, [slot]: itemId } };
 }
 
 // ---------- Callables ----------
@@ -310,10 +417,11 @@ export interface SafeToSaveBreakdown {
   safetyBuffer: Cents;
 }
 
-// One point on the remaining-money chart: what was left on that date.
-export interface RemainingMoneyPoint {
+// One day of the "left over" track record (end-of-day values).
+export interface SafeToSaveHistoryPoint {
   date: IsoDate;
-  amount: Cents;
+  amount: Cents; // what safe-to-save was that day
+  balance: Cents; // checking balance that day
 }
 
 // Backtest: if the user had moved the suggested amount on each recent payday, would they have stayed above $0?
@@ -325,15 +433,19 @@ export interface TrackRecord {
   summary: string; // one plain-English line for the UI
 }
 
-// Shown in the app as "remaining money" (the callable keeps its original name).
+// Shown in the app as "remaining money" / "left over" (the callable keeps its original name).
 export interface GetSafeToSaveResponse {
   amount: Cents;
   explanation: string[]; // short bullet sentences, coach voice
   explanationSource: TextSource;
   nextPayday: IsoDate;
   breakdown: SafeToSaveBreakdown;
-  history: RemainingMoneyPoint[]; // weekly, oldest first, for a chart
-  trackRecord: TrackRecord | null; // null until there's enough history
+  // Last ~30 days ending today, oldest first. Optional: the web app hides the chart until it's filled
+  // (logic/safeToSaveHistory.ts already has safeToSaveOn and balanceOn for this).
+  history?: SafeToSaveHistoryPoint[];
+  // Optional extra: one-line backtest of moving the suggested amount on recent paydays. Null until there's
+  // ~3 months of history; missing when there's no account.
+  trackRecord?: TrackRecord | null;
 }
 
 // getChallenges: returns the caller's open (active or accepted) challenges, generating them if needed.
@@ -465,6 +577,26 @@ export interface JoinGroupResponse {
   alreadyMember: boolean;
 }
 
+// purchaseItem: spends coins on a shop item. The only way coins go down or inventory grows.
+export interface PurchaseItemRequest {
+  itemId: ItemId;
+}
+
+export interface PurchaseItemResponse {
+  coins: number; // balance after buying
+  owned: ItemId[]; // everything owned, starter items included
+}
+
+// equipItem: puts an owned item in a slot (itemId null takes it off). Saved on scores/{uid} so the group sees it.
+export interface EquipItemRequest {
+  slot: AvatarSlot;
+  itemId: ItemId | null;
+}
+
+export interface EquipItemResponse {
+  avatar: EquippedAvatar;
+}
+
 // Name → request/response map, for a typed client helper.
 export interface Callables {
   getSafeToSave: { request: GetSafeToSaveRequest; response: GetSafeToSaveResponse };
@@ -478,6 +610,8 @@ export interface Callables {
   contributeToSquadGoal: { request: ContributeToSquadGoalRequest; response: ContributeToSquadGoalResponse };
   getLeaderboard: { request: GetLeaderboardRequest; response: GetLeaderboardResponse };
   joinGroup: { request: JoinGroupRequest; response: JoinGroupResponse };
+  purchaseItem: { request: PurchaseItemRequest; response: PurchaseItemResponse };
+  equipItem: { request: EquipItemRequest; response: EquipItemResponse };
 }
 export type CallableName = keyof Callables;
 

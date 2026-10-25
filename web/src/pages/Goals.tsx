@@ -2,8 +2,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GOAL_NAME_MAX, type GoalDoc, type WithId } from "@contract";
 import { api } from "../api";
+import { useGame } from "../game/GameContext";
 import { PageHeader } from "../components/AppLayout";
 import { cardClass, inputClass, primaryButton } from "../components/forms";
+import { EmptyState } from "../components/EmptyState";
 import { ProgressRing } from "../components/ProgressRing";
 import { addDays, todayIso } from "../lib/dates";
 import { formatCents, formatDate, parseDollars } from "../lib/format";
@@ -18,6 +20,7 @@ function paceLine(goal: GoalDoc): string {
 
 function CreateGoalForm() {
   const navigate = useNavigate();
+  const { refresh } = useGame();
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [deadline, setDeadline] = useState(addDays(todayIso(), 90));
@@ -35,6 +38,7 @@ function CreateGoalForm() {
     setBusy(true);
     try {
       const goal = await api.createGoal({ name, targetAmount, deadline });
+      void refresh(); // may unlock First Dip
       navigate(`/goals/${goal.id}`);
     } catch {
       setError("Couldn't create the goal right now. Please try again.");
@@ -46,16 +50,16 @@ function CreateGoalForm() {
     <form onSubmit={onSubmit} className="space-y-3">
       <input className={inputClass} placeholder="What are you saving for?" value={name} onChange={(e) => setName(e.target.value)} maxLength={GOAL_NAME_MAX} aria-label="Goal name" />
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-sm text-slate-500">
+        <label className="block text-sm text-ink-muted">
           Target
           <input className={`${inputClass} mt-1`} inputMode="decimal" placeholder="$1,200" value={target} onChange={(e) => setTarget(e.target.value)} />
         </label>
-        <label className="block text-sm text-slate-500">
+        <label className="block text-sm text-ink-muted">
           Deadline
           <input className={`${inputClass} mt-1`} type="date" min={tomorrow} value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </label>
       </div>
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <button type="submit" disabled={busy} className={primaryButton}>
         {busy ? "Creating…" : "Create goal"}
       </button>
@@ -75,27 +79,31 @@ export default function Goals() {
     <>
       <PageHeader title="Goals" subtitle="Name it, size it, hit it." />
       <div className="space-y-4">
-        {failed && <p className={`${cardClass} text-slate-600`}>Couldn't load your goals. Pull to refresh or try again soon.</p>}
-        {!goals && !failed && <div className={`${cardClass} animate-pulse text-slate-400`}>Loading your goals…</div>}
-        {goals?.length === 0 && <p className={`${cardClass} text-slate-600`}>No goals yet. Start with something you'd love to have in a few months.</p>}
+        {failed && <p className={`${cardClass} text-ink-muted`}>Couldn't load your goals. Pull to refresh or try again soon.</p>}
+        {!goals && !failed && <div className={`${cardClass} animate-pulse text-ink-faint`}>Loading your goals…</div>}
+        {goals?.length === 0 && (
+          <EmptyState mascot="sitting" title="No goals yet">
+            Pick something you'd love to have in a few months. We'll find a pace that feels easy.
+          </EmptyState>
+        )}
         <div className="grid gap-4 lg:grid-cols-2">
           {goals?.map((g) => (
             <Link key={g.id} to={`/goals/${g.id}`} className={`${cardClass} flex items-center gap-5 transition-shadow hover:shadow-md`}>
               <ProgressRing pct={progressPct(g)} size={72} stroke={8}>
-                <span className="text-sm font-bold">{progressPct(g)}%</span>
+                <span className="text-sm font-extrabold">{progressPct(g)}%</span>
               </ProgressRing>
               <div className="min-w-0">
-                <p className="truncate text-lg font-bold">{g.name}</p>
-                <p className="text-slate-600">
+                <p className="truncate text-lg font-extrabold">{g.name}</p>
+                <p className="text-ink-muted">
                   {formatCents(g.currentAmount)} of {formatCents(g.targetAmount)}
                 </p>
-                <p className="text-sm text-slate-500">{paceLine(g)}</p>
+                <p className="text-sm text-ink-muted">{paceLine(g)}</p>
               </div>
             </Link>
           ))}
         </div>
         <section className={cardClass}>
-          <h2 className="mb-3 text-lg font-bold">New goal</h2>
+          <h2 className="mb-3 text-lg font-extrabold">New goal</h2>
           <CreateGoalForm />
         </section>
       </div>

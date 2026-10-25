@@ -1,5 +1,138 @@
 @import "tailwindcss";
 
+/*
+ * CapyBalance design tokens.
+ * Brand colors are fixed. Semantic tokens (canvas, surface, ink, heading, primary, line...) change in
+ * dark mode, so components only use semantic tokens and dark mode works everywhere.
+ * Dark mode follows the system unless <html data-theme="light|dark"> overrides it.
+ */
+:root {
+  /* Brand (fixed) */
+  --brand-forest: #1f5b45;
+  --brand-leaf: #4e9b6e;
+  --brand-mint: #8fd19e;
+  --brand-cream: #fbf6ec;
+  --brand-capy: #c8834f;
+  --brand-capy-dark: #8b5a3c;
+  --brand-coin: #f5b82e;
+  --brand-sky: #bfe3ee;
+  --brand-blush: #f2998a;
+
+  /* Semantic: light */
+  --canvas: #fbf6ec;
+  --surface: #ffffff;
+  --surface-2: #f4eee1;
+  --line: #e8dfcc;
+  --ink: #24332b;
+  --ink-muted: #5c6b61;
+  --ink-faint: #8a958c;
+  --heading: #1f5b45;
+  --primary: #367a52; /* leaf, deepened so white text passes 4.5:1 */
+  --primary-edge: #1f5b45;
+  --primary-soft: #e2f2e6;
+  --link: #367a52; /* green text: links, small accents */
+  --on-primary: #ffffff;
+  --coin-edge: #c98f12;
+  --on-coin: #3b2a1a;
+  --danger: #b93b26;
+  --danger-soft: #fde8e4;
+  --warn-ink: #7a5200;
+  --warn-soft: #fdf1d3;
+  --sky-soft: #e3f3f8;
+  --badge-locked: #d6cfbf; /* locked badge silhouette */
+  --badge-locked-2: #c4bcaa;
+}
+
+
+:root[data-theme="dark"] {
+  --canvas: #13201a;
+  --surface: #1b2b23;
+  --surface-2: #22352b;
+  --line: #2e463a;
+  --ink: #f2eee4;
+  --ink-muted: #a9b5ac;
+  --ink-faint: #7d8a81;
+  --heading: #a8ddb4;
+  --primary: #367a52;
+  --primary-edge: #173f2e;
+  --primary-soft: #1f3a2c;
+  --link: #8fd19e;
+  --on-primary: #ffffff;
+  --coin-edge: #a87508;
+  --on-coin: #3b2a1a;
+  --danger: #f08a78;
+  --danger-soft: #3a1f1a;
+  --warn-ink: #f5cf7a;
+  --warn-soft: #3a2f12;
+  --sky-soft: #1c3440;
+  --badge-locked: #3a4e43;
+  --badge-locked-2: #4a6053;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #13201a;
+    --surface: #1b2b23;
+    --surface-2: #22352b;
+    --line: #2e463a;
+    --ink: #f2eee4;
+    --ink-muted: #a9b5ac;
+    --ink-faint: #7d8a81;
+    --heading: #a8ddb4;
+    --primary: #367a52;
+    --primary-edge: #173f2e;
+    --primary-soft: #1f3a2c;
+  --link: #8fd19e;
+    --on-primary: #ffffff;
+    --coin-edge: #a87508;
+    --on-coin: #3b2a1a;
+    --danger: #f08a78;
+    --danger-soft: #3a1f1a;
+    --warn-ink: #f5cf7a;
+    --warn-soft: #3a2f12;
+    --sky-soft: #1c3440;
+  --badge-locked: #3a4e43;
+  --badge-locked-2: #4a6053;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: "Nunito", ui-rounded, ui-sans-serif, system-ui, sans-serif;
+
+  --color-forest: var(--brand-forest);
+  --color-leaf: var(--brand-leaf);
+  --color-mint: var(--brand-mint);
+  --color-cream: var(--brand-cream);
+  --color-capy: var(--brand-capy);
+  --color-capy-dark: var(--brand-capy-dark);
+  --color-coin: var(--brand-coin);
+  --color-sky: var(--brand-sky);
+  --color-blush: var(--brand-blush);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-heading: var(--heading);
+  --color-primary: var(--primary);
+  --color-primary-edge: var(--primary-edge);
+  --color-primary-soft: var(--primary-soft);
+  --color-link: var(--link);
+  --color-on-primary: var(--on-primary);
+  --color-coin-edge: var(--coin-edge);
+  --color-on-coin: var(--on-coin);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn-ink: var(--warn-ink);
+  --color-warn-soft: var(--warn-soft);
+  --color-sky-soft: var(--sky-soft);
+}
+
 /* Scale everything up on very large screens (projector demos). */
 @media (min-width: 1536px) {
   html {
@@ -7,8 +140,120 @@
   }
 }
 
-body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+@layer base {
+  body {
+    @apply bg-canvas font-semibold text-ink antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-extrabold text-heading;
+  }
+  ::selection {
+    background: var(--brand-mint);
+    color: var(--brand-forest);
+  }
+}
+
+@layer components {
+  /* Chunky game-style buttons: a solid 4px bottom edge that presses down on tap.
+     .is-hover / .is-pressed / .is-focus show those states statically (used on /styleguide). */
+  .btn {
+    --edge: var(--primary-edge);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 4px; /* room for the edge */
+    border-radius: 1rem;
+    padding: 0.75rem 1.25rem;
+    font-weight: 800;
+    line-height: 1.25;
+    box-shadow: 0 4px 0 var(--edge);
+    transition:
+      transform 80ms ease-out,
+      box-shadow 80ms ease-out,
+      filter 120ms;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .btn:hover:not(:disabled),
+  .btn.is-hover {
+    filter: brightness(1.07);
+  }
+  .btn:active:not(:disabled),
+  .btn.is-pressed {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 var(--edge);
+  }
+  .btn:focus-visible,
+  .btn.is-focus {
+    outline: 3px solid var(--brand-coin);
+    outline-offset: 3px;
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  .btn-secondary {
+    --edge: var(--line);
+    background: var(--surface);
+    color: var(--heading);
+    border: 2px solid var(--line);
+  }
+  .btn-coin {
+    --edge: var(--coin-edge);
+    background: var(--brand-coin);
+    color: var(--on-coin);
+  }
+  .btn-danger {
+    --edge: #7f2717;
+    background: #c2412d;
+    color: #ffffff;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--link);
+    box-shadow: none;
+  }
+  .btn-sm {
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+  }
+  .btn-lg {
+    padding: 1rem 1.5rem;
+    font-size: 1.125rem;
+  }
+
+  .card {
+    border: 2px solid var(--line);
+    border-radius: 1rem;
+    background: var(--surface);
+  }
+
+  .field {
+    width: 100%;
+    border: 2px solid var(--line);
+    border-radius: 1rem;
+    background: var(--surface);
+    padding: 0.75rem 1rem;
+    color: var(--ink);
+    font-weight: 700;
+    outline: none;
+  }
+  .field::placeholder {
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  .field:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-mint) 55%, transparent);
+  }
 }
 
 /* Points burst: rises from where it's placed and fades out. */
@@ -39,5 +284,8 @@ body {
   .animate-points-burst {
     animation: none;
     opacity: 0;
+  }
+  .btn {
+    transition: none;
   }
 }
