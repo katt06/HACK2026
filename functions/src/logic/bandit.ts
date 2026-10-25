@@ -53,14 +53,30 @@ export function sampleBeta(alpha: number, beta: number, rng: Rng): number {
   return x / (x + sampleGamma(beta, rng));
 }
 
-// How much the shared evidence counts, in "virtual attempts" (chosen by scripts/simulateBandit.ts).
+// How much the shared evidence counts, in "virtual attempts" (chosen by the sweep in scripts/simulateBandit.ts).
 export const PRIOR_STRENGTH = 4;
+
+// shared: the hierarchical prior below. Independent: every arm starts at Beta(1, 1) and learns only from itself
+// (the textbook baseline the simulation compares against). Production always uses the default.
+export interface PriorOptions {
+  shared: boolean;
+  strength: number;
+}
+export const DEFAULT_PRIOR: PriorOptions = { shared: true, strength: PRIOR_STRENGTH };
 
 // Arms share evidence: someone who finishes "cook at home, easy" probably finishes "cook at home, medium".
 // Each arm's prior is centered on this user's completion rate for its type and for its difficulty
 // (each itself Beta(1,1)-smoothed), worth PRIOR_STRENGTH attempts; the arm's own results add on top.
 // With 18 arms and only a few challenges a week, this learns much faster than independent arms.
-export function posterior(byArm: Map<ArmKey, ArmStats>, arm: { type: ChallengeType; difficulty: Difficulty }): { alpha: number; beta: number } {
+export function posterior(
+  byArm: Map<ArmKey, ArmStats>,
+  arm: { type: ChallengeType; difficulty: Difficulty },
+  prior: PriorOptions = DEFAULT_PRIOR,
+): { alpha: number; beta: number } {
+  const own = byArm.get(armKey(arm));
+  const completions = own?.completions ?? 0;
+  const failures = Math.max(0, (own?.attempts ?? 0) - completions);
+  if (!prior.shared) return { alpha: 1 + completions, beta: 1 + failures };
   let typeDone = 0;
   let typeTried = 0;
   let levelDone = 0;
@@ -78,10 +94,7 @@ export function posterior(byArm: Map<ArmKey, ArmStats>, arm: { type: ChallengeTy
     }
   }
   const priorMean = ((1 + typeDone) / (2 + typeTried) + (1 + levelDone) / (2 + levelTried)) / 2;
-  const own = byArm.get(armKey(arm));
-  const completions = own?.completions ?? 0;
-  const failures = Math.max(0, (own?.attempts ?? 0) - completions);
-  return { alpha: PRIOR_STRENGTH * priorMean + completions, beta: PRIOR_STRENGTH * (1 - priorMean) + failures };
+  return { alpha: prior.strength * priorMean + completions, beta: prior.strength * (1 - priorMean) + failures };
 }
 
 // ---------- Choosing ----------
@@ -93,13 +106,14 @@ export function pickChallenges<T extends { type: ChallengeType; difficulty: Diff
   stats: BanditStatsDoc[],
   count: number,
   rng: Rng = Math.random,
+  prior: PriorOptions = DEFAULT_PRIOR,
 ): T[] {
   const byArm = statsByArm(stats);
   const draws = new Map<ArmKey, number>();
   for (const c of candidates) {
     const key = armKey(c);
     if (!draws.has(key)) {
-      const { alpha, beta } = posterior(byArm, c);
+      const { alpha, beta } = posterior(byArm, c, prior);
       draws.set(key, sampleBeta(alpha, beta, rng));
     }
   }

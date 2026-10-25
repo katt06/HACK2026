@@ -1,0 +1,269 @@
+{
+  "config": {
+    "today": "2026-10-24",
+    "personas": [
+      "delivery-spender",
+      "irregular-income",
+      "subscription-creep",
+      "steady-saver",
+      "demo-hero"
+    ],
+    "runsPerPersona": 1,
+    "model": "claude-opus-5-5",
+    "judge": true,
+    "promptChars": 1723
+  },
+  "claudeSkipped": null,
+  "inputs": [
+    {
+      "persona": "delivery-spender",
+      "summaryLines": [
+        "food delivery: $393 in the last 30 days, up 39% vs. a typical month",
+        "transport: $88 in the last 30 days, down 43% vs. a typical month",
+        "subscriptions: $11 in the last 30 days, about the same as a typical month",
+        "subscriptions: 1 recurring charges",
+        "savings goal progress: 31%"
+      ],
+      "historyLines": [
+        "usually finishes hard challenges (2 of 2)"
+      ]
+    },
+    {
+      "persona": "irregular-income",
+      "summaryLines": [
+        "transport: $114 in the last 30 days, down 49% vs. a typical month",
+        "dining out: $76 in the last 30 days, down 50% vs. a typical month",
+        "coffee: $30 in the last 30 days, down 10% vs. a typical month",
+        "subscriptions: $15 in the last 30 days, about the same as a typical month",
+        "subscriptions: 1 recurring charges",
+        "savings goal progress: 48%"
+      ],
+      "historyLines": [
+        "usually finishes hard challenges (3 of 3)"
+      ]
+    },
+    {
+      "persona": "subscription-creep",
+      "summaryLines": [
+        "subscriptions: $146 in the last 30 days, up 60% vs. a typical month",
+        "shopping: $104 in the last 30 days, down 19% vs. a typical month",
+        "dining out: $27 in the last 30 days, down 76% vs. a typical month",
+        "subscriptions: 8 recurring charges",
+        "savings goal progress: 22%"
+      ],
+      "historyLines": [
+        "usually finishes hard challenges (2 of 2)"
+      ]
+    },
+    {
+      "persona": "steady-saver",
+      "summaryLines": [
+        "dining out: $52 in the last 30 days, down 74% vs. a typical month",
+        "subscriptions: $11 in the last 30 days, about the same as a typical month",
+        "coffee: $10 in the last 30 days, down 28% vs. a typical month",
+        "subscriptions: 1 recurring charges",
+        "savings goal progress: 74%"
+      ],
+      "historyLines": [
+        "usually finishes hard challenges (5 of 5)",
+        "usually finishes medium challenges (3 of 3)",
+        "usually finishes no-spend day challenges (2 of 2)",
+        "usually finishes transit swap challenges (2 of 2)"
+      ]
+    },
+    {
+      "persona": "demo-hero",
+      "summaryLines": [
+        "food delivery: $92 in the last 30 days, down 46% vs. a typical month",
+        "coffee: $66 in the last 30 days, up 31% vs. a typical month",
+        "dining out: $35 in the last 30 days, down 49% vs. a typical month",
+        "subscriptions: $11 in the last 30 days, about the same as a typical month",
+        "subscriptions: 1 recurring charges",
+        "savings goal progress: 42%"
+      ],
+      "historyLines": [
+        "usually finishes hard challenges (3 of 3)"
+      ]
+    }
+  ],
+  "template": {
+    "challenges": 90,
+    "groundedReason": 0.333,
+    "madeUpNumber": 0,
+    "personalized": 0.567,
+    "crossUserOverlap": 0.862,
+    "typesPerPersona": 6,
+    "judge": {
+      "specific": 2.5,
+      "doable": 4.3,
+      "voice": 3.467,
+      "n": 30
+    },
+    "guardrailPass": 1
+  },
+  "claude": {
+    "challenges": 30,
+    "groundedReason": 1,
+    "madeUpNumber": 0,
+    "personalized": 0.7,
+    "crossUserOverlap": 0.414,
+    "typesPerPersona": 5.2,
+    "judge": {
+      "specific": 4.4,
+      "doable": 3.933,
+      "voice": 4.533,
+      "n": 30
+    },
+    "guardrailPass": 1,
+    "followsBrief": 1,
+    "responses": [
+      {
+        "persona": "delivery-spender",
+        "returned": 6,
+        "passed": 6,
+        "followsBrief": true
+      },
+      {
+        "persona": "irregular-income",
+        "returned": 6,
+        "passed": 6,
+        "followsBrief": true
+      },
+      {
+        "persona": "subscription-creep",
+        "returned": 6,
+        "passed": 6,
+        "followsBrief": true
+      },
+      {
+        "persona": "steady-saver",
+        "returned": 6,
+        "passed": 6,
+        "followsBrief": true
+      },
+      {
+        "persona": "demo-hero",
+        "returned": 6,
+        "passed": 6,
+        "followsBrief": true
+      }
+    ]
+  },
+  "examples": [
+    {
+      "persona": "delivery-spender",
+      "template": [
+        {
+          "description": "Pick one day this week with no non-essential spending.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        },
+        {
+          "description": "Have two no-spend days this week.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        }
+      ],
+      "claude": [
+        {
+          "description": "Cook dinner at home 4 nights this week instead of ordering delivery.",
+          "reason": "Food delivery hit $393 in the last 30 days, up 39% vs. a typical month. You crush hard challenges, so go for it!"
+        },
+        {
+          "description": "Keep food delivery under $60 total this week.",
+          "reason": "Delivery is at $393 this month, up 39%. A weekly cap helps bring it back toward your usual level."
+        }
+      ]
+    },
+    {
+      "persona": "irregular-income",
+      "template": [
+        {
+          "description": "Pick one day this week with no non-essential spending.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        },
+        {
+          "description": "Have two no-spend days this week.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        }
+      ],
+      "claude": [
+        {
+          "description": "Keep your dining out spending under $15 this week.",
+          "reason": "Dining out is $76 in the last 30 days, down 50%. You crush hard challenges, so let's lock in that win."
+        },
+        {
+          "description": "Swap 3 rides or drives for walking, biking, or transit this week.",
+          "reason": "Transport is $114 in the last 30 days, down 49% vs. typical. A few more swaps keep that momentum going."
+        }
+      ]
+    },
+    {
+      "persona": "subscription-creep",
+      "template": [
+        {
+          "description": "Pick one day this week with no non-essential spending.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        },
+        {
+          "description": "Have two no-spend days this week.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        }
+      ],
+      "claude": [
+        {
+          "description": "Go through all 8 of your subscriptions and cancel or pause at least 2 you don't use much.",
+          "reason": "Subscriptions hit $146 in the last 30 days, up 60% from a typical month, across 8 recurring charges."
+        },
+        {
+          "description": "List your 8 recurring charges with their prices in one note so you can see them all at a glance.",
+          "reason": "You have 8 recurring charges totaling $146 this month, so a quick list is an easy first step."
+        }
+      ]
+    },
+    {
+      "persona": "steady-saver",
+      "template": [
+        {
+          "description": "Pick one day this week with no non-essential spending.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        },
+        {
+          "description": "Have two no-spend days this week.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        }
+      ],
+      "claude": [
+        {
+          "description": "Pick two days this week with zero non-essential purchases. Groceries and bills don't count.",
+          "reason": "You've finished 2 of 2 no-spend days, and you're 74% to your goal. Two days keeps that momentum rolling!"
+        },
+        {
+          "description": "Walk, bike, or take transit for 3 trips you'd normally drive or ride-share this week.",
+          "reason": "You've nailed 2 of 2 transit swaps before. Another round is a great fit while you're 74% to your goal."
+        }
+      ]
+    },
+    {
+      "persona": "demo-hero",
+      "template": [
+        {
+          "description": "Pick one day this week with no non-essential spending.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        },
+        {
+          "description": "Have two no-spend days this week.",
+          "reason": "A no-spend day is a quick way to see where the small purchases go."
+        }
+      ],
+      "claude": [
+        {
+          "description": "Make your coffee at home on 4 days this week instead of buying it.",
+          "reason": "Coffee hit $66 in the last 30 days, up 31% vs. a typical month, so it's a great spot to win back some cash."
+        },
+        {
+          "description": "Brew at home every day this week: zero coffee-shop purchases for all 7 days.",
+          "reason": "You crush hard challenges (3 of 3), and coffee is your one rising category at $66, up 31%. Time to flip that trend!"
+        }
+      ]
+    }
+  ]
+}

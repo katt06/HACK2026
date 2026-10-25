@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppLayout } from "./components/AppLayout";
@@ -14,12 +15,23 @@ import NotFound from "./pages/NotFound";
 import Shop from "./pages/Shop";
 import Styleguide from "./pages/Styleguide";
 
+// Slide charts: loaded on demand so the simulation data stays out of the main bundle.
+const BanditDeck = lazy(() => import("./pages/BanditDeck"));
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/demo" element={<Demo />} />
       <Route path="/styleguide" element={<Styleguide />} />
+      <Route
+        path="/deck/bandit"
+        element={
+          <Suspense fallback={null}>
+            <BanditDeck />
+          </Suspense>
+        }
+      />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />

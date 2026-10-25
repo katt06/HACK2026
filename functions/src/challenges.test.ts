@@ -6,7 +6,9 @@ import { mergeCandidates, toCandidates, violatesGuardrails } from "./logic/chall
 import { takeRateLimitSlot } from "./logic/rateLimit.js";
 import { normalizeMerchant } from "./logic/recurring.js";
 import { buildSpendingSummary, summaryToText, topRisingTrend } from "./logic/spendingSummary.js";
-import { CHALLENGE_SYSTEM_PROMPT } from "./llm.js";
+import { CHALLENGE_SYSTEM_PROMPT, challengeUserMessage } from "./llm.js";
+import { describeWhatWorks } from "./logic/learnedPreferences.js";
+import type { BanditStatsDoc } from "./contract.js";
 import { templateCandidates } from "./templates.js";
 
 const TODAY = "2026-10-24";
@@ -157,5 +159,42 @@ describe("system prompt", () => {
     expect(CHALLENGE_SYSTEM_PROMPT).toMatch(/Never give investment/);
     expect(CHALLENGE_SYSTEM_PROMPT).toMatch(/groceries, medicine or health care, rent, utilities, or insurance/);
     for (const type of CHALLENGE_TYPES) expect(CHALLENGE_SYSTEM_PROMPT).toContain(type);
+  });
+});
+
+describe("what the bandit has learned, for the prompt", () => {
+  const stat = (challengeType: BanditStatsDoc["challengeType"], difficulty: BanditStatsDoc["difficulty"], attempts: number, completions: number): BanditStatsDoc => ({
+    userId: "u",
+    challengeType,
+    difficulty,
+    attempts,
+    completions,
+  });
+
+  it("names clear patterns by type and difficulty, strongest first, with counts", () => {
+    const lines = describeWhatWorks([
+      stat("cook_at_home", "easy", 3, 3),
+      stat("cook_at_home", "medium", 2, 1),
+      stat("subscription_review", "hard", 3, 0),
+      stat("brew_at_home", "easy", 2, 2),
+    ]);
+    expect(lines).toEqual([
+      "usually finishes cook-at-home challenges (4 of 5)",
+      "usually finishes easy challenges (5 of 5)",
+      "rarely finishes hard challenges (0 of 3)",
+      "rarely finishes subscription review challenges (0 of 3)",
+    ]);
+  });
+
+  it("says nothing until there's enough evidence, and skips middling rates", () => {
+    expect(describeWhatWorks([stat("cook_at_home", "easy", 1, 1)])).toEqual([]);
+    expect(describeWhatWorks([stat("transit_swap", "medium", 4, 2)])).toEqual([]);
+  });
+
+  it("goes into the prompt only when there is something to say, and never with dollars", () => {
+    const withHistory = challengeUserMessage(["coffee: $48 in the last 30 days"], ["usually finishes easy challenges (5 of 6)"]);
+    expect(withHistory).toContain("<history>\n- usually finishes easy challenges (5 of 6)\n</history>");
+    expect(challengeUserMessage(["coffee: $48"])).not.toContain("<history>");
+    expect(describeWhatWorks([stat("cook_at_home", "easy", 5, 5)]).join(" ")).not.toMatch(/\$/);
   });
 });

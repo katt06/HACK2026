@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ChallengeDoc, WithId } from "@contract";
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
+import { ClaudeTag } from "../components/ClaudeTag";
 import { Difficulty } from "../components/Difficulty";
 import { EmptyState } from "../components/EmptyState";
 import { cardClass } from "../components/forms";
@@ -62,6 +63,11 @@ function ChallengeCard({
         <span className="text-sm font-extrabold text-link">+{challenge.points} XP</span>
       </div>
 
+      {challenge.source === "llm" && (
+        <div className="mt-3">
+          <ClaudeTag />
+        </div>
+      )}
       <p className="mt-3 flex-1 text-lg font-semibold leading-snug lg:text-xl">{challenge.description}</p>
 
       <button

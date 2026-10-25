@@ -3,6 +3,7 @@ import { logger } from "firebase-functions";
 import { onCall } from "firebase-functions/v2/https";
 import { defineSecret, defineString } from "firebase-functions/params";
 import type {
+  BanditStatsDoc,
   ChallengeDoc,
   GetChallengesRequest,
   GetChallengesResponse,
@@ -16,6 +17,7 @@ import { expireStaleChallenges, loadBanditStats } from "./banditStore.js";
 import { OPEN_STATUSES, pickChallenges } from "./logic/bandit.js";
 import { mergeCandidates, toCandidates, type ChallengeCandidate } from "./logic/challengeRules.js";
 import { addDays, todayIso } from "./logic/dates.js";
+import { describeWhatWorks } from "./logic/learnedPreferences.js";
 import { takeRateLimitSlot } from "./logic/rateLimit.js";
 import { goalProgressPct } from "./logic/scoring.js";
 import { buildSpendingSummary, summaryToText, type SpendingSummary } from "./logic/spendingSummary.js";
@@ -68,7 +70,13 @@ async function takeLlmSlot(db: Firestore, uid: string): Promise<boolean> {
 }
 
 // Claude's suggestions when possible; templates on rate limit, missing key, or any error. Never throws.
-async function generateCandidates(db: Firestore, uid: string, active: ChallengeDoc[], needed: number): Promise<ChallengeCandidate[]> {
+async function generateCandidates(
+  db: Firestore,
+  uid: string,
+  active: ChallengeDoc[],
+  stats: BanditStatsDoc[],
+  needed: number,
+): Promise<ChallengeCandidate[]> {
   let summary: SpendingSummary | undefined;
   try {
     summary = await loadSummary(db, uid, active);
@@ -79,7 +87,13 @@ async function generateCandidates(db: Firestore, uid: string, active: ChallengeD
       logger.info("LLM rate limit reached; using templates", { uid });
       return templates;
     }
-    const raw = await generateChallengesWithClaude({ apiKey, model: claudeModel.value(), summaryLines: summaryToText(summary) });
+    // Closing the loop: Claude writes toward what the bandit has seen this user finish.
+    const raw = await generateChallengesWithClaude({
+      apiKey,
+      model: claudeModel.value(),
+      summaryLines: summaryToText(summary),
+      historyLines: describeWhatWorks(stats),
+    });
     const llm = toCandidates(raw);
     logger.info("Generated challenges", { uid, returned: raw.length, valid: llm.length });
     return mergeCandidates(llm, templates, needed);
@@ -101,7 +115,8 @@ export const getChallenges = onCall<GetChallengesRequest>(
     if (needed <= 0) return { challenges: active };
 
     const taken = new Set(active.map(armKey));
-    const [generated, stats] = await Promise.all([generateCandidates(db, uid, active, needed), loadBanditStats(db, uid)]);
+    const stats = await loadBanditStats(db, uid);
+    const generated = await generateCandidates(db, uid, active, stats, needed);
     const picks = pickChallenges(
       generated.filter((c) => !taken.has(armKey(c))),
       stats,
@@ -122,6 +137,7 @@ export const getChallenges = onCall<GetChallengesRequest>(
         createdAt: now,
         completedAt: null,
         reason: c.reason,
+        source: c.source,
       };
       batch.set(ref, doc);
       return { id: ref.id, ...doc };

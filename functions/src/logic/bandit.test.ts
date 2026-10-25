@@ -46,6 +46,22 @@ describe("sampling", () => {
   });
 });
 
+describe("prior options (for the simulation)", () => {
+  it("independent arms start at Beta(1, 1) and ignore other arms' results", () => {
+    const byArm = statsByArm([{ userId: "u", challengeType: "cook_at_home", difficulty: "easy", attempts: 5, completions: 5 }]);
+    expect(posterior(byArm, { type: "cook_at_home", difficulty: "medium" }, { shared: false, strength: 4 })).toEqual({ alpha: 1, beta: 1 });
+    expect(posterior(byArm, { type: "cook_at_home", difficulty: "easy" }, { shared: false, strength: 4 })).toEqual({ alpha: 6, beta: 1 });
+  });
+
+  it("strength scales how much the shared evidence counts", () => {
+    const byArm = statsByArm([]);
+    const weak = posterior(byArm, { type: "cook_at_home", difficulty: "easy" }, { shared: true, strength: 1 });
+    const strong = posterior(byArm, { type: "cook_at_home", difficulty: "easy" }, { shared: true, strength: 16 });
+    expect(weak.alpha + weak.beta).toBeCloseTo(1);
+    expect(strong.alpha + strong.beta).toBeCloseTo(16);
+  });
+});
+
 describe("pickChallenges", () => {
   const candidates = templateCandidates();
 

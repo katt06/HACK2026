@@ -10,6 +10,7 @@
     "dev:mock": "VITE_USE_MOCKS=true npm run dev",
     "seed": "tsx scripts/seed.ts",
     "simulate": "tsx scripts/simulateBandit.ts",
+    "eval:challenges": "tsx scripts/evalChallenges.ts",
     "test": "npm test --workspaces --if-present",
     "test:rules": "firebase emulators:exec --only firestore --project demo-hack2026 \"vitest run --config tests/rules/vitest.config.ts\"",
     "build": "npm run build --workspaces"
@@ -20,5 +21,9 @@
     "firebase-tools": "^14.0.0",
     "tsx": "^4.19.0",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "dotenv": "^18.0.9"
   }
 }

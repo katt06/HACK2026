@@ -174,6 +174,7 @@ export interface ChallengeDoc {
   createdAt: IsoDateTime;
   completedAt: IsoDateTime | null;
   reason: string; // why this challenge was picked for the user
+  source?: TextSource; // who wrote the text: Claude ("llm") or a fallback template; older docs don't have it
 }
 
 // banditStats/{uid_type_difficulty}

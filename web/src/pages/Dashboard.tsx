@@ -5,6 +5,7 @@ import { api } from "../api";
 import { ActivityCalendar } from "../components/ActivityCalendar";
 import { Avatar, describeAvatar } from "../avatar/Avatar";
 import { useAuth } from "../auth/AuthContext";
+import { ClaudeTag } from "../components/ClaudeTag";
 import { Difficulty } from "../components/Difficulty";
 import { cardClass } from "../components/forms";
 import { ProgressRing } from "../components/ProgressRing";
@@ -325,6 +326,11 @@ function ChallengesSection() {
                 <Difficulty level={c.difficulty} />
                 <span className="text-sm font-extrabold text-link">+{c.points} XP</span>
               </div>
+              {c.source === "llm" && (
+                <div className="mt-3">
+                  <ClaudeTag />
+                </div>
+              )}
               <p className="mt-3 font-medium lg:text-lg">{c.description}</p>
               <p className="mt-1 text-sm text-ink-muted">{c.reason}</p>
             </Link>
