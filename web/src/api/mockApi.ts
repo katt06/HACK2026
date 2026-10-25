@@ -242,6 +242,14 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
 
     getMyScore: () => respond("getMyScore", () => mine().score),
 
+    acceptChallenge: (challengeId) =>
+      respond("acceptChallenge", () => {
+        const c = mine().active.find((x) => x.id === challengeId);
+        if (!c) throw new FirebaseError("functions/not-found", "Challenge not found.");
+        c.status = "accepted";
+        return { challenge: c };
+      }),
+
     completeChallenge: (challengeId) =>
       respond("completeChallenge", (): CompleteChallengeResponse => {
         const s = mine();

@@ -247,3 +247,15 @@ describe("getMyScore", () => {
     expect((await api.getMyScore())?.points).toBe(280 + c.points);
   });
 });
+
+describe("acceptChallenge", () => {
+  it("marks a challenge accepted, keeps it open, and still allows completing it", async () => {
+    const { api } = setup();
+    const [c] = (await api.getChallenges()).challenges;
+    expect((await api.acceptChallenge(c.id)).challenge.status).toBe("accepted");
+    expect((await api.acceptChallenge(c.id)).challenge.status).toBe("accepted");
+    expect((await api.getChallenges()).challenges.find((x) => x.id === c.id)?.status).toBe("accepted");
+    expect((await api.completeChallenge(c.id)).challenge.status).toBe("completed");
+    await expect(api.acceptChallenge(c.id)).rejects.toMatchObject({ code: "functions/not-found" });
+  });
+});

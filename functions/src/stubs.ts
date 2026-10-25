@@ -1,5 +1,6 @@
 // Fixed fixture data returned by the callable stubs until the real logic lands.
 import type {
+  AcceptChallengeResponse,
   ChallengeDoc,
   CompleteChallengeResponse,
   GetChallengesResponse,
@@ -47,6 +48,12 @@ const challenges: WithId<ChallengeDoc>[] = [
 
 export function challengesStub(uid: string): GetChallengesResponse {
   return { challenges: challenges.map((c) => ({ ...c, userId: uid })) };
+}
+
+// Returns null when the id isn't one of the stub challenges.
+export function acceptChallengeStub(uid: string, challengeId: string): AcceptChallengeResponse | null {
+  const challenge = challenges.find((c) => c.id === challengeId);
+  return challenge ? { challenge: { ...challenge, userId: uid, status: "accepted" } } : null;
 }
 
 // Returns null when the id isn't one of the stub challenges.

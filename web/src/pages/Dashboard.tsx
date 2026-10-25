@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { ChallengeDoc, GetSafeToSaveResponse, GoalDoc, ScoreDoc, WithId } from "@contract";
+import type { GetSafeToSaveResponse, GoalDoc, ScoreDoc, WithId } from "@contract";
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import { Difficulty } from "../components/Difficulty";
 import { cardClass } from "../components/forms";
 import { ProgressRing } from "../components/ProgressRing";
 import { Skeleton } from "../components/Skeleton";
@@ -230,12 +231,6 @@ function StreakBody({ score }: { score: ScoreDoc | null }) {
 
 // ---------- Challenges ----------
 
-const DIFFICULTY_STYLE: Record<ChallengeDoc["difficulty"], string> = {
-  easy: "bg-sky-100 text-sky-800",
-  medium: "bg-violet-100 text-violet-800",
-  hard: "bg-rose-100 text-rose-800",
-};
-
 function ChallengesSection() {
   const state = useAsync(api.getChallenges);
   return (
@@ -262,7 +257,7 @@ function ChallengesSection() {
           state.data.challenges.slice(0, 3).map((c) => (
             <Link key={c.id} to="/challenges" className="flex flex-col rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-center justify-between">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${DIFFICULTY_STYLE[c.difficulty]}`}>{c.difficulty}</span>
+                <Difficulty level={c.difficulty} />
                 <span className="text-sm font-bold text-emerald-600">+{c.points} pts</span>
               </div>
               <p className="mt-3 font-medium lg:text-lg">{c.description}</p>

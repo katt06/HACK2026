@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { challengesStub, completeChallengeStub } from "./stubs.js";
+import { acceptChallengeStub, challengesStub, completeChallengeStub } from "./stubs.js";
 
 describe("challengesStub", () => {
   it("assigns challenges to the caller", () => {
     const { challenges } = challengesStub("u1");
     expect(challenges.length).toBeGreaterThan(0);
     expect(challenges.every((c) => c.userId === "u1" && c.status === "active")).toBe(true);
+  });
+});
+
+describe("acceptChallengeStub", () => {
+  it("marks a known challenge accepted for the caller", () => {
+    expect(acceptChallengeStub("u1", "stub-challenge-1")?.challenge).toMatchObject({ status: "accepted", userId: "u1" });
+    expect(acceptChallengeStub("u1", "nope")).toBeNull();
   });
 });
 

@@ -1,13 +1,15 @@
 import { initializeApp } from "firebase-admin/app";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import type {
+  AcceptChallengeRequest,
+  AcceptChallengeResponse,
   CompleteChallengeRequest,
   CompleteChallengeResponse,
   GetChallengesRequest,
   GetChallengesResponse,
   HealthResponse,
 } from "./contract.js";
-import { challengesStub, completeChallengeStub } from "./stubs.js";
+import { acceptChallengeStub, challengesStub, completeChallengeStub } from "./stubs.js";
 import { requireAuth, requireString } from "./validate.js";
 
 initializeApp();
@@ -28,6 +30,14 @@ export const health = onCall((): HealthResponse => {
 export const getChallenges = onCall<GetChallengesRequest>((request): GetChallengesResponse => {
   const uid = requireAuth(request);
   return challengesStub(uid);
+});
+
+export const acceptChallenge = onCall<AcceptChallengeRequest>((request): AcceptChallengeResponse => {
+  const uid = requireAuth(request);
+  const challengeId = requireString(request.data?.challengeId, "challengeId");
+  const result = acceptChallengeStub(uid, challengeId);
+  if (!result) throw new HttpsError("not-found", "Challenge not found.");
+  return result;
 });
 
 export const completeChallenge = onCall<CompleteChallengeRequest>((request): CompleteChallengeResponse => {
