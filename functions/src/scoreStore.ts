@@ -9,12 +9,13 @@ import { computeScore } from "./logic/scoring.js";
 
 // Loads everything the score depends on and rewrites scores/{uid}. Safe to call any time; it's idempotent.
 export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreDoc> {
-  const [userSnap, goalsSnap, challengesSnap, accountSnap, txSnap] = await Promise.all([
+  const [userSnap, goalsSnap, challengesSnap, accountSnap, txSnap, scoreSnap] = await Promise.all([
     db.doc(`users/${uid}`).get(),
     db.collection("goals").where("ownerId", "==", uid).get(),
     db.collection("challenges").where("userId", "==", uid).where("status", "==", "completed").get(),
     db.doc(`accounts/${uid}`).get(),
     db.collection("transactions").where("userId", "==", uid).get(),
+    db.doc(`scores/${uid}`).get(),
   ]);
   const user = userSnap.data() as UserDoc | undefined;
   const today = todayIso(new Date(), user?.settings?.timezone);
@@ -38,6 +39,7 @@ export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreD
     zeroSafeToSaveDays: account
       ? zeroSafeToSaveDaysCounter({ today, currentBalance: account.currentBalance, balanceAsOf: account.asOf, transactions })
       : undefined,
+    previousBadges: (scoreSnap.data() as ScoreDoc | undefined)?.badges,
   });
   await db.doc(`scores/${uid}`).set(score);
   return score;

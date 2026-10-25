@@ -3,10 +3,13 @@ import { onCall } from "firebase-functions/v2/https";
 import type { AccountDoc, GetSafeToSaveRequest, GetSafeToSaveResponse, TransactionDoc, UserDoc } from "./contract.js";
 import { addDays, todayIso } from "./logic/dates.js";
 import { forecastSafeToSave, noDataForecast } from "./logic/forecast.js";
+import { FORECAST_HISTORY_DAYS, safeToSaveHistory } from "./logic/safeToSaveHistory.js";
 import { requireAuth } from "./validate.js";
 
-// Enough for monthly bills to show up 3+ times, plus the 90-day irregular-income lookback.
-const HISTORY_DAYS = 120;
+// Each day of the 30-day track record needs its own 120-day forecast window (enough for monthly bills to
+// show up 3+ times, plus the 90-day irregular-income lookback), so load 150 days.
+const TRACK_RECORD_DAYS = 30;
+const HISTORY_DAYS = FORECAST_HISTORY_DAYS + TRACK_RECORD_DAYS;
 
 export const getSafeToSave = onCall<GetSafeToSaveRequest>(async (request): Promise<GetSafeToSaveResponse> => {
   const uid = requireAuth(request);
@@ -24,7 +27,15 @@ export const getSafeToSave = onCall<GetSafeToSaveRequest>(async (request): Promi
 
   const { incomeIsIrregular: _, ...forecast } =
     account || transactions.length > 0
-      ? forecastSafeToSave({ today, currentBalance: account?.currentBalance ?? 0, transactions })
+      ? forecastSafeToSave({
+          today,
+          currentBalance: account?.currentBalance ?? 0,
+          transactions: transactions.filter((t) => t.date >= addDays(today, -FORECAST_HISTORY_DAYS)),
+        })
       : noDataForecast(today);
-  return { ...forecast, explanationSource: "template" };
+  // Past balances are rebuilt from the account's balance, so there's no track record without one.
+  const history = account
+    ? safeToSaveHistory({ today, currentBalance: account.currentBalance, balanceAsOf: account.asOf, transactions }, TRACK_RECORD_DAYS)
+    : undefined;
+  return { ...forecast, explanationSource: "template", ...(history && { history }) };
 });

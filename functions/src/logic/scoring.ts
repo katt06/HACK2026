@@ -1,6 +1,7 @@
 // Scores shown to group members: progress, weekly saving streak, spending improvement, points, level.
 // Pure functions. Scores never contain dollar amounts.
-import type { Category, Cents, ContributionEntry, ExpenseEntry, GoalDoc, GoalEntryDoc, IsoDate, LeaderboardEntry, ScoreDoc } from "../contract.js";
+import { evaluateBadges } from "../contract.js";
+import type { BadgeId, Category, Cents, ContributionEntry, ExpenseEntry, GoalDoc, GoalEntryDoc, IsoDate, LeaderboardEntry, ScoreDoc } from "../contract.js";
 import { addDays, dayOfWeek, daysBetween } from "./dates.js";
 import type { TransactionLike } from "./recurring.js";
 
@@ -171,18 +172,31 @@ export interface ScoreInput {
   baselineSpendByCategory: Partial<Record<Category, Cents>>;
   transactions: (TransactionLike & { category: Category })[];
   zeroSafeToSaveDays?: (weekStart: IsoDate) => number;
+  previousBadges?: readonly BadgeId[]; // from the existing score doc, so badges stay earned
 }
 
 export function computeScore(input: ScoreInput): ScoreDoc {
   const points = input.completedChallengePoints.reduce((s, p) => s + p, 0) + progressPoints(input.goals);
+  const streak = weeklyStreak(input.goals, input.today, input.zeroSafeToSaveDays);
+  const badges = evaluateBadges(
+    { goalsCreated: input.goals.length, streak, challengesCompleted: input.completedChallengePoints.length },
+    input.previousBadges,
+  );
   return {
     userId: input.userId,
     goalProgressPct: goalProgressPct(input.goals),
-    streak: weeklyStreak(input.goals, input.today, input.zeroSafeToSaveDays),
+    streak,
     improvementScore: improvementScore(input.baselineSpendByCategory, input.transactions, input.today),
     points,
     level: levelFor(points),
+    badges: badges.filter((b) => b.earned).map((b) => b.id),
   };
+}
+
+// Coins are earned 1:1 with challenge points. Users who had XP before the server tracked coins start
+// with all of it (the same fallback the web app shows), so their balance never drops.
+export function coinsAfterChallenge(coins: number | undefined, xpAfter: number, earned: number): number {
+  return coins === undefined ? xpAfter : coins + earned;
 }
 
 // Points reward effort over time; improvement and streak keep it fair for people who started later.

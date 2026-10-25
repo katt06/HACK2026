@@ -1,8 +1,9 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import type { ChallengeDoc, CompleteChallengeRequest, CompleteChallengeResponse, ScoreDoc } from "./contract.js";
+import type { ChallengeDoc, CompleteChallengeRequest, CompleteChallengeResponse, ScoreDoc, UserDoc } from "./contract.js";
 import { banditOutcome } from "./banditStore.js";
 import { OPEN_STATUSES, statsDelta } from "./logic/bandit.js";
+import { coinsAfterChallenge } from "./logic/scoring.js";
 import { recomputeScore } from "./scoreStore.js";
 import { requireAuth, requireString } from "./validate.js";
 
@@ -29,6 +30,13 @@ export const completeChallenge = onCall<CompleteChallengeRequest>(async (request
 
   // Recompute now so the response carries the new score (the challenge trigger will also do this; it's idempotent).
   const score = await recomputeScore(db, uid);
+
+  // Coins: the transaction above lets each challenge complete only once, so this runs once per completion.
+  const userRef = db.doc(`users/${uid}`);
+  await db.runTransaction(async (tx) => {
+    const coins = ((await tx.get(userRef)).data() as UserDoc | undefined)?.coins;
+    tx.set(userRef, { coins: coinsAfterChallenge(coins, score.points, challenge.points) }, { merge: true });
+  });
   return {
     challenge: { id: challengeId, ...challenge },
     pointsAwarded: challenge.points,
