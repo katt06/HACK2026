@@ -365,3 +365,63 @@ describe("avatar shop", () => {
     expect(await api.equipItem("glasses", null)).toEqual({ avatar: {} });
   });
 });
+
+describe("addToGoal (from checking)", () => {
+  it("moves money out of the balance into the goal as a verified entry", async () => {
+    const { api } = setup();
+    const before = (await api.getSafeToSave()).breakdown.currentBalance;
+    const res = await api.addToGoal("demo-hero-goal", 5000);
+    expect(res.entry).toMatchObject({ kind: "contribution", amount: 5000, verified: true });
+    expect(res.newBalance).toBe(before - 5000);
+    expect((await api.getSafeToSave()).breakdown.currentBalance).toBe(before - 5000);
+    expect((await api.getGoal("demo-hero-goal")).entries[0]).toMatchObject({ amount: 5000, verified: true });
+  });
+
+  it("refuses more than the balance, more than the goal needs, or someone else's goal", async () => {
+    const { api } = setup();
+    await expect(api.addToGoal("demo-hero-goal", 99_999_999)).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    const goal = (await api.getGoal("demo-hero-goal")).goal;
+    await expect(api.addToGoal("demo-hero-goal", goal.targetAmount - goal.currentAmount + 1)).rejects.toThrow(/left to reach this goal/);
+    await expect(api.addToGoal("steady-saver-goal", 100)).rejects.toMatchObject({ code: "not-found" });
+  });
+});
+
+describe("setAutoSave", () => {
+  it("stores a valid rule, turns off with null, and rejects out-of-range rules", async () => {
+    const { api } = setup();
+    expect((await api.setAutoSave("demo-hero-goal", { kind: "percentOfBalance", percent: 10 })).goal.autoSave).toEqual({ kind: "percentOfBalance", percent: 10 });
+    expect((await api.getGoal("demo-hero-goal")).goal.autoSave).toEqual({ kind: "percentOfBalance", percent: 10 });
+    expect((await api.setAutoSave("demo-hero-goal", null)).goal.autoSave).toBeNull();
+    await expect(api.setAutoSave("demo-hero-goal", { kind: "percentOfBalance", percent: 90 })).rejects.toMatchObject({ code: "functions/invalid-argument" });
+  });
+});
+
+describe("squad goals", () => {
+  it("shows the Demo Squad's cabin trip without anyone else's dollars", async () => {
+    const { api } = setup();
+    const squad = (await api.getSquadGoal("demo-group"))!;
+    expect(squad).toMatchObject({ name: "Cabin trip", progressPct: 37, milestonesReached: [25], myContributed: 0 });
+    expect(squad.members.find((m) => m.isMe)).toMatchObject({ contributions: 0, contributedThisWeek: false });
+    expect(JSON.stringify(squad)).not.toMatch(/200000|30000|75000/);
+  });
+
+  it("chipping in past 50% unlocks the milestone and gives every member +25 XP", async () => {
+    const { api } = setup();
+    const before = await api.getLeaderboard("demo-group");
+    const res = await api.contributeToSquadGoal("demo-group", 25000);
+    expect(res.newMilestones).toEqual([50]);
+    expect(res.squadGoal).toMatchObject({ progressPct: 50, myContributed: 25000 });
+    const after = await api.getLeaderboard("demo-group");
+    for (const e of after.entries) expect(e.points).toBe(before.entries.find((b) => b.userId === e.userId)!.points + 25);
+  });
+
+  it("starts a new squad goal once per group, and only for members", async () => {
+    const { api } = setup();
+    const { id } = await api.createGroup("Roomies");
+    expect(await api.getSquadGoal(id)).toBeNull();
+    const created = await api.createSquadGoal({ groupId: id, name: "New couch", targetAmount: 60000, deadline: "2027-03-01" });
+    expect(created).toMatchObject({ name: "New couch", progressPct: 0, createdByMe: true });
+    await expect(api.createSquadGoal({ groupId: id, name: "Again", targetAmount: 5000, deadline: "2027-03-01" })).rejects.toMatchObject({ code: "functions/already-exists" });
+    await expect(api.getSquadGoal("gig-crew")).rejects.toMatchObject({ code: "functions/not-found" });
+  });
+});

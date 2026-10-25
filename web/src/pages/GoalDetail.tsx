@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { FirebaseError } from "firebase/app";
 import type { GoalEntryDoc, WithId } from "@contract";
 import { api, type GoalDetail as GoalDetailData } from "../api";
+import { AutoSaveCard } from "../components/AutoSaveCard";
 import { useGame } from "../game/GameContext";
 import { cardClass, inputClass, primaryButton } from "../components/forms";
 import { GoalTimelineChart } from "../components/GoalTimelineChart";
@@ -69,8 +70,12 @@ function FromBalance({ amountCents, onPick }: { amountCents: number | null; onPi
   );
 }
 
+// "From checking" really moves money (server-side, verified, worth 1.5× XP); "Saved elsewhere" just logs it.
+type Source = "checking" | "elsewhere";
+
 function ContributeForm({ goalId, onDone }: { goalId: string; onDone: (msg: string) => void }) {
   const { refresh } = useGame();
+  const [source, setSource] = useState<Source>("checking");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -82,23 +87,47 @@ function ContributeForm({ goalId, onDone }: { goalId: string; onDone: (msg: stri
     if (!cents) return setError("Enter an amount, like 25.");
     setBusy(true);
     try {
-      await api.addContribution(goalId, cents, note);
-      void refresh(); // goal progress can earn XP
-      onDone(`Added ${formatCents(cents)}. It shows as unverified until a linked bank account confirms it.`);
-    } catch {
-      setError("Couldn't save that right now. Please try again.");
+      if (source === "checking") {
+        const { newBalance } = await api.addToGoal(goalId, cents);
+        void refresh(); // verified progress earns XP
+        onDone(`Moved ${formatCents(cents)} from checking (${formatCents(newBalance)} left). Verified ✓, so it counts 1.5× toward XP.`);
+      } else {
+        await api.addContribution(goalId, cents, note);
+        void refresh(); // goal progress can earn XP
+        onDone(`Added ${formatCents(cents)}. It shows as unverified until a linked bank account confirms it.`);
+      }
+    } catch (err) {
+      // The server explains these in plain words ("You have $40.00 in checking.").
+      const shown = err instanceof FirebaseError && /failed-precondition|invalid-argument/.test(err.code);
+      setError(shown ? (err as FirebaseError).message : "Couldn't save that right now. Please try again.");
       setBusy(false);
     }
   }
 
+  const sourceTab = (s: Source, label: string) => (
+    <button type="button" onClick={() => setSource(s)} aria-pressed={source === s} className={`btn btn-sm flex-1 ${source === s ? "btn-primary" : "btn-secondary"}`}>
+      {label}
+    </button>
+  );
+
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <FromBalance amountCents={parseDollars(amount)} onPick={(cents) => setAmount((cents / 100).toFixed(2))} />
+      <div className="flex gap-2">
+        {sourceTab("checking", "From checking")}
+        {sourceTab("elsewhere", "Saved elsewhere")}
+      </div>
+      {source === "checking" ? (
+        <FromBalance amountCents={parseDollars(amount)} onPick={(cents) => setAmount((cents / 100).toFixed(2))} />
+      ) : (
+        <p className="text-sm text-ink-muted">Already moved money another way? Log it here. It shows as unverified.</p>
+      )}
       <input className={inputClass} inputMode="decimal" placeholder="Amount, like $25" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Contribution amount" autoFocus />
-      <input className={inputClass} placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={80} aria-label="Note" />
+      {source === "elsewhere" && (
+        <input className={inputClass} placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={80} aria-label="Note" />
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
       <button type="submit" disabled={busy} className={primaryButton}>
-        {busy ? "Saving…" : "Add to goal"}
+        {busy ? "Saving…" : source === "checking" ? "Move to goal" : "Log it"}
       </button>
     </form>
   );
@@ -312,6 +341,10 @@ export default function GoalDetail() {
           {panel === "contribute" ? <ContributeForm goalId={goal.id} onDone={done} /> : <ExpenseFlow data={data} onDone={done} />}
         </section>
       )}
+
+      <div className="mt-4">
+        <AutoSaveCard key={goal.id} goal={goal} onSaved={setNotice} />
+      </div>
 
       <section className={`${cardClass} mt-4`}>
         <h2 className="mb-2 text-lg font-extrabold">Progress over time</h2>

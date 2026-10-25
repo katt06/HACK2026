@@ -1,7 +1,10 @@
 // In-memory mock of the callables. State resets on page reload.
 import { FirebaseError } from "firebase/app";
 import {
+  AUTO_SAVE_MAX_PERCENT,
   DEFAULT_AVATAR,
+  SQUAD_MILESTONES,
+  SQUAD_MILESTONE_POINTS,
   MAX_GROUP_MEMBERS,
   checkEquip,
   checkPurchase,
@@ -11,8 +14,11 @@ import {
   normalizeInviteCode,
   toGroupSummary,
   GOAL_NAME_MAX,
+  type AutoSaveRule,
   type ChallengeDoc,
   type CompleteChallengeResponse,
+  type ContributionEntry,
+  type SquadGoalSummary,
   type ItemId,
   type GoalDoc,
   type GoalEntryDoc,
@@ -166,6 +172,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
   let goals = initialGoals();
   // Money "moved" from checking into goals this session, so the mock balance updates after contributions.
   let movedToGoals = new Map<PersonaId, number>();
+  let squads = initialSquads();
 
   function initialState(): Map<PersonaId, PersonaState> {
     const createdAt = now().toISOString();
@@ -232,6 +239,86 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         return [`${p.id}-goal`, { goal, entries }];
       }),
     );
+  }
+
+  interface MockSquad {
+    name: string;
+    targetAmount: number;
+    deadline: IsoDate;
+    createdBy: string;
+    contributions: { userId: string; amount: number; createdAt: string }[];
+  }
+
+  // Same story as the seed: the Demo Squad's cabin trip is at 37%, and everyone but Alex has chipped in.
+  function initialSquads(): Map<string, MockSquad> {
+    const twoDaysAgo = new Date(now().getTime() - 2 * 86_400_000).toISOString();
+    const chipIns: [PersonaId, number][] = [
+      ["steady-saver", 30000],
+      ["irregular-income", 20000],
+      ["delivery-spender", 15000],
+      ["subscription-creep", 10000],
+    ];
+    return new Map([
+      [
+        "demo-group",
+        {
+          name: "Cabin trip",
+          targetAmount: 200000,
+          deadline: addIsoDays(todayIso(now()), 7 * 16),
+          createdBy: uidFor("steady-saver"),
+          contributions: chipIns.map(([id, amount]) => ({ userId: uidFor(id), amount, createdAt: twoDaysAgo })),
+        },
+      ],
+    ]);
+  }
+
+  const squadTotal = (sq: MockSquad) => sq.contributions.reduce((s, c) => s + c.amount, 0);
+  const milestonesFor = (current: number, target: number) => SQUAD_MILESTONES.filter((m) => current * 100 >= m * target);
+
+  // What a member sees (same shape and rules as the getSquadGoal callable): no one else's dollars.
+  function squadSummary(groupId: string): SquadGoalSummary | null {
+    const sq = squads.get(groupId);
+    if (!sq) return null;
+    const group = groups.get(groupId)!;
+    const me = uidFor(settings.persona);
+    const weekStart = addIsoDays(todayIso(now()), -((now().getDay() + 6) % 7));
+    const current = squadTotal(sq);
+    return {
+      groupId,
+      name: sq.name,
+      deadline: sq.deadline,
+      progressPct: Math.min(100, Math.floor((100 * current) / sq.targetAmount)),
+      milestonesReached: milestonesFor(current, sq.targetAmount),
+      isComplete: current >= sq.targetAmount,
+      createdByMe: sq.createdBy === me,
+      myContributed: sq.contributions.filter((c) => c.userId === me).reduce((s, c) => s + c.amount, 0),
+      members: group.members.map((userId) => {
+        const theirs = sq.contributions.filter((c) => c.userId === userId);
+        return {
+          userId,
+          displayName: group.memberNames[userId] ?? "Member",
+          isMe: userId === me,
+          contributions: theirs.length,
+          contributedThisWeek: theirs.some((c) => c.createdAt.slice(0, 10) >= weekStart),
+        };
+      }),
+    };
+  }
+
+  function myGroup(groupId: string): GroupDoc {
+    const group = groups.get(groupId);
+    if (!group || !group.members.includes(uidFor(settings.persona))) throw new FirebaseError("functions/not-found", "Group not found.");
+    return group;
+  }
+
+  // Money moving out of the mock checking balance, with the same limits as the server.
+  function takeFromChecking(amount: number, maxForGoal: number) {
+    if (!Number.isInteger(amount) || amount <= 0) throw new FirebaseError("functions/invalid-argument", "amount must be a positive whole number of cents.");
+    const balance = persona().currentBalance - (movedToGoals.get(settings.persona) ?? 0);
+    if (amount > balance) throw new FirebaseError("functions/failed-precondition", `You have ${formatCents(balance)} in checking.`);
+    if (amount > maxForGoal) throw new FirebaseError("functions/failed-precondition", `Only ${formatCents(Math.max(0, maxForGoal))} is left to reach this goal.`);
+    movedToGoals.set(settings.persona, (movedToGoals.get(settings.persona) ?? 0) + amount);
+    return balance - amount;
   }
 
   // Missing and not-mine look the same, like Firestore rules.
@@ -519,6 +606,69 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         addEntry(g, { kind: "contribution", amount, verified: false, note: note.trim(), createdAt: now().toISOString() });
       }),
 
+    addToGoal: (goalId, amount) =>
+      respond("addToGoal", () => {
+        const g = myGoal(goalId);
+        const newBalance = takeFromChecking(amount, g.goal.targetAmount - g.goal.currentAmount);
+        g.goal.currentAmount += amount;
+        const entry: ContributionEntry = { kind: "contribution", amount, verified: true, note: "Added from checking", createdAt: now().toISOString() };
+        addEntry(g, entry);
+        return { goal: { ...g.goal, id: goalId }, entry, newBalance };
+      }),
+
+    setAutoSave: (goalId, rule) =>
+      respond("setAutoSave", () => {
+        const g = myGoal(goalId);
+        const valid =
+          rule === null ||
+          (rule.kind === "percentOfBalance" && Number.isInteger(rule.percent) && rule.percent >= 1 && rule.percent <= AUTO_SAVE_MAX_PERCENT) ||
+          (rule.kind === "fixed" && Number.isInteger(rule.amount) && rule.amount >= 100);
+        if (!valid) throw new FirebaseError("functions/invalid-argument", `Pick 1–${AUTO_SAVE_MAX_PERCENT}% or at least $1.`);
+        g.goal.autoSave = rule === null ? null : ({ ...rule } as AutoSaveRule);
+        return { goal: { ...g.goal, id: goalId } };
+      }),
+
+    getSquadGoal: (groupId) =>
+      respond("getSquadGoal", () => {
+        myGroup(groupId);
+        return squadSummary(groupId);
+      }),
+
+    createSquadGoal: ({ groupId, name, targetAmount, deadline }) =>
+      respond("createSquadGoal", () => {
+        myGroup(groupId);
+        const trimmed = name.trim();
+        if (!trimmed || trimmed.length > 60) throw new FirebaseError("functions/invalid-argument", "Name must be 1–60 characters.");
+        if (!Number.isInteger(targetAmount) || targetAmount < 1000 || targetAmount > 10_000_000) {
+          throw new FirebaseError("functions/invalid-argument", "Target must be between $10 and $100,000.");
+        }
+        if (!(deadline > todayIso(now()))) throw new FirebaseError("functions/invalid-argument", "Deadline must be a future date (YYYY-MM-DD).");
+        if (squads.has(groupId)) throw new FirebaseError("functions/already-exists", "This group already has a squad goal.");
+        squads.set(groupId, { name: trimmed, targetAmount, deadline, createdBy: uidFor(settings.persona), contributions: [] });
+        return squadSummary(groupId)!;
+      }),
+
+    contributeToSquadGoal: (groupId, amount) =>
+      respond("contributeToSquadGoal", () => {
+        const group = myGroup(groupId);
+        const sq = squads.get(groupId);
+        if (!sq) throw new FirebaseError("functions/not-found", "This group doesn't have a squad goal yet.");
+        const before = squadTotal(sq);
+        if (before >= sq.targetAmount) throw new FirebaseError("functions/failed-precondition", "This squad goal is already complete.");
+        const newBalance = takeFromChecking(amount, sq.targetAmount - before);
+        sq.contributions.push({ userId: uidFor(settings.persona), amount, createdAt: now().toISOString() });
+        const reachedBefore = milestonesFor(before, sq.targetAmount);
+        const unlocked = milestonesFor(before + amount, sq.targetAmount).filter((m) => !reachedBefore.includes(m));
+        // Every member of the squad gets the bonus, like the server's score recompute.
+        for (const p of PERSONAS) {
+          if (unlocked.length === 0 || !group.members.includes(uidFor(p.id))) continue;
+          const s = state.get(p.id)!;
+          s.score.points += unlocked.length * SQUAD_MILESTONE_POINTS;
+          s.score.level = levelFor(s.score.points);
+        }
+        return { squadGoal: squadSummary(groupId)!, newBalance, newMilestones: unlocked };
+      }),
+
     applyGoalFlex: (goalId, expenseAmount, option, note = "") =>
       respond("applyGoalFlex", () => {
         const g = myGoal(goalId);
@@ -558,6 +708,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
       groups = initialGroups();
       goals = initialGoals();
       movedToGoals = new Map();
+      squads = initialSquads();
       notify();
     },
     status() {
