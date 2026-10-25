@@ -7,6 +7,7 @@ import { Difficulty } from "../components/Difficulty";
 import { cardClass } from "../components/forms";
 import { ProgressRing } from "../components/ProgressRing";
 import { Skeleton } from "../components/Skeleton";
+import { TrackRecordChart } from "../components/TrackRecordChart";
 import { todayIso } from "../lib/dates";
 import { formatCents, formatDate } from "../lib/format";
 import { goalPlan, progressPct } from "../lib/goalMath";
@@ -51,6 +52,7 @@ function Breakdown({ data }: { data: GetSafeToSaveResponse }) {
   return (
     <div className="space-y-1.5">
       {row("In checking now", b.currentBalance, "+")}
+      {b.expectedIncome > 0 && row(`Income expected by ${formatDate(data.nextPayday)}`, b.expectedIncome, "+")}
       {row(`Bills due before ${formatDate(data.nextPayday)}`, b.upcomingBillsTotal, "−")}
       {b.upcomingBills.map((bill) => (
         <div key={bill.merchant + bill.dueDate}>{row(`${bill.merchant} · ${formatDate(bill.dueDate)}`, bill.amount, "−", true)}</div>
@@ -58,7 +60,7 @@ function Breakdown({ data }: { data: GetSafeToSaveResponse }) {
       {row("Everyday spending until payday", b.projectedSpending, "−")}
       {row("Safety cushion", b.safetyBuffer, "−")}
       <div className="flex justify-between gap-4 border-t border-emerald-400 pt-2 font-bold">
-        <span>Safe to save</span>
+        <span>Left over</span>
         <span className="tabular-nums">{formatCents(data.amount)}</span>
       </div>
     </div>
@@ -71,7 +73,7 @@ function SafeToSaveCard() {
 
   return (
     <section className="rounded-3xl bg-emerald-600 p-6 text-white shadow-sm lg:p-10" aria-busy={state.status === "loading"}>
-      <p className="text-sm font-medium text-emerald-100 lg:text-base">Safe to save today</p>
+      <p className="text-sm font-medium text-emerald-100 lg:text-base">Left over this pay period</p>
 
       {state.status === "loading" && (
         <div className="mt-2 space-y-3">
@@ -91,11 +93,19 @@ function SafeToSaveCard() {
 
       {state.status === "ready" && (
         <>
-          <p className="mt-1 text-6xl font-bold tracking-tight tabular-nums lg:text-8xl">{formatCents(state.data.amount)}</p>
+          <p className="mt-1 text-6xl font-bold tracking-tight lg:text-8xl">{formatCents(state.data.amount)}</p>
           <p className="mt-2 text-emerald-100 lg:text-lg">
-            {state.data.amount > 0 ? "You can move this to a goal without coming up short." : "Nothing extra this time, and that's okay."} Next payday{" "}
-            {formatDate(state.data.nextPayday)}.
+            {state.data.amount > 0
+              ? "What's left after bills, everyday spending, and a small cushion. You can move it to a goal without coming up short."
+              : "Nothing extra after bills and everyday spending this time, and that's okay."}{" "}
+            Next payday {formatDate(state.data.nextPayday)}.
           </p>
+          {state.data.history && state.data.history.length > 1 && (
+            <div className="mt-5 rounded-2xl bg-white p-4 text-slate-900 lg:p-6">
+              <p className="mb-2 text-sm font-semibold text-slate-700">Left over, last {state.data.history.length} days</p>
+              <TrackRecordChart points={state.data.history} />
+            </div>
+          )}
           <button
             onClick={() => setOpen(!open)}
             aria-expanded={open}
@@ -219,7 +229,7 @@ function StreakBody({ score }: { score: ScoreDoc | null }) {
   }
   return (
     <div>
-      <p className="text-4xl font-bold lg:text-5xl">
+      <p className="whitespace-nowrap text-4xl font-bold lg:text-5xl">
         <span aria-hidden>🔥</span> {score.streak} {score.streak === 1 ? "week" : "weeks"}
       </p>
       <p className="mt-1 text-slate-500">

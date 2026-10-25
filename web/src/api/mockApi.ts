@@ -15,6 +15,7 @@ import {
   type GroupSummary,
   type IsoDate,
   type LeaderboardEntry,
+  type SafeToSaveHistoryPoint,
   type ScoreDoc,
   type WithId,
 } from "@contract";
@@ -92,6 +93,41 @@ function challengeFrom(p: Persona, seedIndex: number, createdAt: string): WithId
   };
 }
 
+// Deterministic 0–1 numbers from a string seed (mulberry32), so each persona's history is stable.
+function seededRandom(seed: string): () => number {
+  let a = [...seed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 2654435761), 1779033703) >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 30 days of balance and left-over ending exactly at today's values. Walks backwards from today, undoing
+// each day: add back everyday spending and last month's bills (all treated as monthly), and take out
+// paychecks (every 14 days before the next one), sized so a month's income covers bills plus spending.
+// Each day's left-over sets aside that day's bills due before its next payday, spending until then, and the cushion.
+export function mockHistory(p: Persona, today: Date, balance: number, days = 30): SafeToSaveHistoryPoint[] {
+  const rand = seededRandom(p.id);
+  const dailySpend = p.projectedSpending / Math.max(1, p.paydayInDays);
+  const monthlyBills = p.bills.reduce((sum, bill) => sum + bill.amount, 0);
+  const paycheck = ((monthlyBills + dailySpend * 30) * 14) / 30;
+  const points: SafeToSaveHistoryPoint[] = [];
+  let b = balance;
+  for (let i = 0; i < days; i++) {
+    const day = addDays(today, -i);
+    const daysToPayday = (p.paydayInDays + i) % 14 || 14;
+    const billsDue = p.bills.filter((bill) => (bill.dueInDays + i) % 30 <= daysToPayday).reduce((sum, bill) => sum + bill.amount, 0);
+    const committed = billsDue + dailySpend * daysToPayday + p.safetyBuffer;
+    points.push({ date: isoDate(day), balance: Math.round(b), amount: Math.max(0, Math.round(b - committed)) });
+    const billsPaid = p.bills.filter((bill) => bill.dueInDays + i === 30).reduce((sum, bill) => sum + bill.amount, 0);
+    const isPayday = (p.paydayInDays + i) % 14 === 0;
+    b += dailySpend * (0.4 + rand() * 1.2) + billsPaid - (isPayday ? paycheck : 0);
+  }
+  return points.reverse();
+}
+
 function joinNames(names: string[]): string {
   return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
@@ -104,6 +140,8 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
   let state = initialState();
   let groups = initialGroups();
   let goals = initialGoals();
+  // Money "moved" from checking into goals this session, so the mock balance updates after contributions.
+  let movedToGoals = new Map<PersonaId, number>();
 
   function initialState(): Map<PersonaId, PersonaState> {
     const createdAt = now().toISOString();
@@ -211,13 +249,15 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           dueDate: isoDate(addDays(today, b.dueInDays)),
         }));
         const upcomingBillsTotal = upcomingBills.reduce((sum, b) => sum + b.amount, 0);
-        const amount = Math.max(0, p.currentBalance - upcomingBillsTotal - p.projectedSpending - p.safetyBuffer);
+        const balance = p.currentBalance - (movedToGoals.get(p.id) ?? 0);
+        const committed = upcomingBillsTotal + p.projectedSpending + p.safetyBuffer;
+        const amount = Math.max(0, balance - committed);
         const paydayText = payday.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
         return {
           amount,
           explanation: [
-            `You have ${formatCents(p.currentBalance)} in checking, and your next paycheck should land ${paydayText}.`,
+            `You have ${formatCents(balance)} in checking, and your next paycheck should land ${paydayText}.`,
             `${joinNames(p.bills.map((b) => b.merchant))} (${formatCents(upcomingBillsTotal)}) ${p.bills.length === 1 ? "is" : "are"} due before then, so we set that aside first.`,
             `Based on your usual spending, about ${formatCents(p.projectedSpending)} covers everything else until payday.`,
             p.insight,
@@ -227,8 +267,9 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           ],
           explanationSource: "template",
           nextPayday: isoDate(payday),
+          history: mockHistory(p, today, balance),
           breakdown: {
-            currentBalance: p.currentBalance,
+            currentBalance: balance,
             expectedIncome: 0,
             upcomingBillsTotal,
             upcomingBills,
@@ -383,6 +424,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         if (!Number.isInteger(amount) || amount <= 0) throw new FirebaseError("permission-denied", "Invalid amount.");
         const g = myGoal(goalId);
         g.goal.currentAmount += amount;
+        movedToGoals.set(settings.persona, (movedToGoals.get(settings.persona) ?? 0) + amount);
         addEntry(g, { kind: "contribution", amount, verified: false, note: note.trim(), createdAt: now().toISOString() });
       }),
 
@@ -424,6 +466,7 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
       state = initialState();
       groups = initialGroups();
       goals = initialGoals();
+      movedToGoals = new Map();
       notify();
     },
     status() {

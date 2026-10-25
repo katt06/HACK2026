@@ -259,3 +259,30 @@ describe("acceptChallenge", () => {
     await expect(api.acceptChallenge(c.id)).rejects.toMatchObject({ code: "functions/not-found" });
   });
 });
+
+describe("safe-to-save history and balance", () => {
+  it.each(PERSONAS.map((p) => p.id))("%s: 30 days ending at today's numbers, never negative", async (persona) => {
+    const { api } = setup({ settings: { persona } });
+    const res = await api.getSafeToSave();
+    const history = res.history!;
+    expect(history).toHaveLength(30);
+    expect(history.at(-1)).toEqual({ date: "2026-10-24", amount: res.amount, balance: res.breakdown.currentBalance });
+    expect(history.map((h) => h.date)).toEqual([...history.map((h) => h.date)].sort());
+    expect(history.every((h) => h.amount >= 0 && h.balance >= 0)).toBe(true);
+  });
+
+  it("is stable across calls", async () => {
+    const { api } = setup();
+    expect((await api.getSafeToSave()).history).toEqual((await api.getSafeToSave()).history);
+  });
+
+  it("adding money to a goal lowers the balance and what's left over", async () => {
+    const { api } = setup();
+    const before = await api.getSafeToSave();
+    const [goal] = await api.getMyGoals();
+    await api.addContribution(goal.id, 5000);
+    const after = await api.getSafeToSave();
+    expect(after.breakdown.currentBalance).toBe(before.breakdown.currentBalance - 5000);
+    expect(after.amount).toBe(before.amount - 5000);
+  });
+});

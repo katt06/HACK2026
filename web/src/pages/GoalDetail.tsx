@@ -8,6 +8,7 @@ import { ProgressRing } from "../components/ProgressRing";
 import { todayIso } from "../lib/dates";
 import { formatCents, formatDate, parseDollars } from "../lib/format";
 import { flexOptions, goalPlan, progressPct, type FlexOption } from "../lib/goalMath";
+import { useAsync } from "../lib/useAsync";
 
 type Panel = "none" | "contribute" | "expense";
 
@@ -24,6 +25,44 @@ function PaceCard({ data }: { data: GoalDetailData }) {
       <p className="text-sm font-medium text-slate-500">Pace needed</p>
       <p className="text-3xl font-bold lg:text-4xl">{big}</p>
       <p className="mt-1 text-slate-600">{small}</p>
+    </div>
+  );
+}
+
+// Quick amounts based on the in-app checking balance. Hidden if the balance can't be loaded.
+function FromBalance({ amountCents, onPick }: { amountCents: number | null; onPick: (cents: number) => void }) {
+  const state = useAsync(api.getSafeToSave);
+  if (state.status !== "ready") return null;
+  const { amount: leftOver, breakdown } = state.data;
+  const balance = breakdown.currentBalance;
+  const options = [
+    ...(leftOver > 0 ? [{ label: "What's left over", cents: leftOver }] : []),
+    { label: "10% of balance", cents: Math.floor(balance * 0.1) },
+    { label: "5% of balance", cents: Math.floor(balance * 0.05) },
+  ].filter((o) => o.cents > 0);
+  return (
+    <div className="rounded-2xl bg-slate-50 p-3">
+      <p className="text-sm text-slate-600">
+        From your checking balance of <strong className="text-slate-900">{formatCents(balance)}</strong>
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((o) => (
+          <button
+            key={o.label}
+            type="button"
+            onClick={() => onPick(o.cents)}
+            className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
+          >
+            {o.label} · {formatCents(o.cents)}
+          </button>
+        ))}
+      </div>
+      {amountCents !== null && amountCents > leftOver && (
+        <p className="mt-2 text-sm text-amber-800">
+          That's more than what's left over ({formatCents(leftOver)}). The rest is set aside for bills and everyday spending until payday, so
+          only add it if you're comfortable.
+        </p>
+      )}
     </div>
   );
 }
@@ -50,6 +89,7 @@ function ContributeForm({ goalId, onDone }: { goalId: string; onDone: (msg: stri
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
+      <FromBalance amountCents={parseDollars(amount)} onPick={(cents) => setAmount((cents / 100).toFixed(2))} />
       <input className={inputClass} inputMode="decimal" placeholder="Amount, like $25" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Contribution amount" autoFocus />
       <input className={inputClass} placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={80} aria-label="Note" />
       {error && <p className="text-sm text-rose-600">{error}</p>}

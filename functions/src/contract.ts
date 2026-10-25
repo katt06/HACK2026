@@ -265,12 +265,22 @@ export interface SafeToSaveBreakdown {
   safetyBuffer: Cents;
 }
 
+// One day of the "left over" track record (end-of-day values).
+export interface SafeToSaveHistoryPoint {
+  date: IsoDate;
+  amount: Cents; // what safe-to-save was that day
+  balance: Cents; // checking balance that day
+}
+
 export interface GetSafeToSaveResponse {
   amount: Cents;
   explanation: string[]; // short bullet sentences, coach voice
   explanationSource: TextSource;
   nextPayday: IsoDate;
   breakdown: SafeToSaveBreakdown;
+  // Last ~30 days ending today, oldest first. Optional: the web app hides the chart until it's filled
+  // (logic/safeToSaveHistory.ts already has safeToSaveOn and balanceOn for this).
+  history?: SafeToSaveHistoryPoint[];
 }
 
 // getChallenges: returns the caller's open (active or accepted) challenges, generating them if needed.
