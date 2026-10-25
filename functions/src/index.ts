@@ -14,6 +14,7 @@ export { refreshRecurring } from "./recurringJob.js";
 export { getSafeToSave } from "./safeToSave.js";
 export { onChallengeWritten, onGoalEntryWritten, onGoalWritten, refreshScores } from "./scoreStore.js";
 export { syncScoreViewers } from "./scoreViewers.js";
+export { contributeToSquadGoal, createSquadGoal, getSquadGoal, onSquadGoalWritten } from "./squadGoals.js";
 
 export const health = onCall((): HealthResponse => {
   return { ok: true, time: new Date().toISOString() };

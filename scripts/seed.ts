@@ -98,6 +98,10 @@ async function main() {
     writes.push([db.doc(`scores/${user.uid}`), user.score]);
   }
   for (const [id, group] of Object.entries(data.groups)) writes.push([db.doc(`groups/${id}`), group]);
+  for (const [groupId, { squad, contributions }] of Object.entries(data.squadGoals)) {
+    writes.push([db.doc(`squadGoals/${groupId}`), squad]);
+    contributions.forEach((c, i) => writes.push([db.doc(`squadGoals/${groupId}/contributions/${c.userId}-${i}`), c]));
+  }
   // syncScoreViewers does this when the functions emulator is running; write it here so it doesn't have to be.
   const groups = Object.values(data.groups);
   for (const user of data.users) writes.push([db.doc(`scoreViewers/${user.uid}`), { uids: scoreViewersFor(user.uid, groups) }]);

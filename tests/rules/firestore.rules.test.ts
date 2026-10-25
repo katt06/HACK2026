@@ -85,8 +85,9 @@ describe("a group member can't see another member's private data", () => {
 });
 
 describe("server-only collections", () => {
-  it("even the owner can't read or write transactions, recurring, accounts, banditStats, scoreViewers", async () => {
-    for (const path of ["transactions/t1", "recurring/alice_rent", "accounts/alice", "banditStats/alice_no_spend_day_easy", "scoreViewers/alice"]) {
+  it("even the owner can't read or write transactions, recurring, accounts, banditStats, scoreViewers, squad goals", async () => {
+    const paths = ["transactions/t1", "recurring/alice_rent", "accounts/alice", "banditStats/alice_no_spend_day_easy", "scoreViewers/alice", "squadGoals/g1", "squadGoals/g1/contributions/c1"];
+    for (const path of paths) {
       await assertFails(getDoc(doc(db("alice"), path)));
       await assertFails(setDoc(doc(db("alice"), path), { userId: "alice" }));
     }
