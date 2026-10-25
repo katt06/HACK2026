@@ -144,6 +144,12 @@ describe("goals", () => {
     await assertFails(addDoc(collection(db("alice"), "goals"), goal("bob")));
   });
 
+  it("can't set auto-save directly (setAutoSave validates it)", async () => {
+    await assertFails(updateDoc(doc(db("alice"), "goals/alice-goal"), { autoSave: { kind: "percentOfBalance", percent: 100 } }));
+    await assertFails(updateDoc(doc(db("alice"), "goals/alice-goal"), { autoSaveLastRunOn: "2026-10-24" }));
+    await assertFails(addDoc(collection(db("alice"), "goals"), { ...goal("alice"), autoSave: { kind: "fixed", amount: 100 } }));
+  });
+
   it("only accept unverified contributions", async () => {
     const entries = collection(db("alice"), "goals/alice-goal/entries");
     const entry = { kind: "contribution", amount: 2500, note: "", createdAt: "2026-10-24T12:00:00.000Z" };

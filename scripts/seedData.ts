@@ -4,6 +4,7 @@ import {
   CHALLENGE_POINTS,
   CHALLENGE_TYPES,
   type AccountDoc,
+  type AutoSaveRule,
   type Category,
   type Cents,
   type ChallengeDoc,
@@ -154,7 +155,7 @@ interface PersonaSpec {
   displayName: string;
   story: string;
   currentBalance: Cents;
-  goal: { name: string; weekly: Cents; streak: number; olderChance: number; progressPct: number };
+  goal: { name: string; weekly: Cents; streak: number; olderChance: number; progressPct: number; autoSave?: AutoSaveRule };
   history(l: Ledger): void;
 }
 
@@ -275,7 +276,8 @@ const PERSONAS: Record<PersonaId, PersonaSpec> = {
     displayName: "Alex",
     story: "Demo hero",
     currentBalance: 124000,
-    goal: { name: "Spring break trip", weekly: 4000, streak: 4, olderChance: 0.6, progressPct: 42 },
+    // Auto-saves 10% of the balance each payday, so `npm run payday -- demo-hero` can show it on stage.
+    goal: { name: "Spring break trip", weekly: 4000, streak: 4, olderChance: 0.6, progressPct: 42, autoSave: { kind: "percentOfBalance", percent: 10 } },
     history(l) {
       l.biweeklyPay("INITECH PAYROLL", 190000, addDays(l.today, 6));
       l.bill("ELM STREET APARTMENTS", "rent", 90000, dayOfMonth(addDays(l.today, 4)));
@@ -321,6 +323,7 @@ function buildGoal(uid: PersonaId, spec: PersonaSpec["goal"], rng: Rng, today: I
     verified: false,
     sizingRecommendation: null,
     pausedUntil: null,
+    ...(spec.autoSave ? { autoSave: spec.autoSave, autoSaveLastRunOn: null } : {}),
     createdAt: `${addDays(today, -(7 * 26))}T15:00:00.000Z`,
   };
   return { goal, contributions };

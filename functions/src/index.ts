@@ -7,6 +7,7 @@ initializeApp();
 export { acceptChallenge } from "./acceptChallenge.js";
 export { getChallenges } from "./challenges.js";
 export { completeChallenge } from "./completeChallenge.js";
+export { addToGoal, runAutoSaves, setAutoSave } from "./goalMoney.js";
 export { joinGroup } from "./groups.js";
 export { getLeaderboard } from "./leaderboard.js";
 export { refreshRecurring } from "./recurringJob.js";

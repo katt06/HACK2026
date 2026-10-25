@@ -101,7 +101,18 @@ export interface GoalDoc {
   sizingRecommendation: SizingRecommendation | null; // server-only
   pausedUntil: IsoDate | null; // set by goal flex "pause"; no saving expected before this date
   createdAt: IsoDateTime;
+  // Server-only (set through setAutoSave). Optional so goals created before auto-save existed stay valid.
+  autoSave?: AutoSaveRule | null;
+  autoSaveLastRunOn?: IsoDate | null; // auto-save runs at most once per goal per day
 }
+
+// Recurring "auto-save" (never called investing): runs each payday, capped at that day's remaining money
+// so it can't leave the user short before the next paycheck.
+export type AutoSaveRule =
+  | { kind: "percentOfBalance"; percent: number } // whole percent, 1–50
+  | { kind: "fixed"; amount: Cents };
+
+export const AUTO_SAVE_MAX_PERCENT = 50;
 
 export const GOAL_NAME_MAX = 60;
 
@@ -275,12 +286,30 @@ export interface SafeToSaveBreakdown {
   safetyBuffer: Cents;
 }
 
+// One point on the remaining-money chart: what was left on that date.
+export interface RemainingMoneyPoint {
+  date: IsoDate;
+  amount: Cents;
+}
+
+// Backtest: if the user had moved the suggested amount on each recent payday, would they have stayed above $0?
+export interface TrackRecord {
+  checks: number; // past paydays (or two-week check-ins for irregular income) tested
+  stayedPositive: number; // how many of those kept the balance at or above $0 until the next one
+  lowestBalance: Cents; // lowest balance across all of them, after moving the amount
+  since: IsoDate; // date of the first check
+  summary: string; // one plain-English line for the UI
+}
+
+// Shown in the app as "remaining money" (the callable keeps its original name).
 export interface GetSafeToSaveResponse {
   amount: Cents;
   explanation: string[]; // short bullet sentences, coach voice
   explanationSource: TextSource;
   nextPayday: IsoDate;
   breakdown: SafeToSaveBreakdown;
+  history: RemainingMoneyPoint[]; // weekly, oldest first, for a chart
+  trackRecord: TrackRecord | null; // null until there's enough history
 }
 
 // getChallenges: returns the caller's open (active or accepted) challenges, generating them if needed.
@@ -309,6 +338,29 @@ export interface CompleteChallengeResponse {
   pointsAwarded: number;
   score: ScoreDoc; // caller's score after the update
   leveledUp: boolean;
+}
+
+// addToGoal: move money from the tracked checking balance into a goal (an in-app transfer; the app
+// can't move real money). Recorded as a verified contribution.
+export interface AddToGoalRequest {
+  goalId: string;
+  amount: Cents; // > 0, at most the balance and what's left to reach the goal
+}
+
+export interface AddToGoalResponse {
+  goal: WithId<GoalDoc>;
+  entry: ContributionEntry;
+  newBalance: Cents;
+}
+
+// setAutoSave: rule = null turns it off.
+export interface SetAutoSaveRequest {
+  goalId: string;
+  rule: AutoSaveRule | null;
+}
+
+export interface SetAutoSaveResponse {
+  goal: WithId<GoalDoc>;
 }
 
 // getLeaderboard
@@ -343,6 +395,8 @@ export interface Callables {
   getChallenges: { request: GetChallengesRequest; response: GetChallengesResponse };
   acceptChallenge: { request: AcceptChallengeRequest; response: AcceptChallengeResponse };
   completeChallenge: { request: CompleteChallengeRequest; response: CompleteChallengeResponse };
+  addToGoal: { request: AddToGoalRequest; response: AddToGoalResponse };
+  setAutoSave: { request: SetAutoSaveRequest; response: SetAutoSaveResponse };
   getLeaderboard: { request: GetLeaderboardRequest; response: GetLeaderboardResponse };
   joinGroup: { request: JoinGroupRequest; response: JoinGroupResponse };
 }

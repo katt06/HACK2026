@@ -222,8 +222,8 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
             `Based on your usual spending, about ${formatCents(p.projectedSpending)} covers everything else until payday.`,
             p.insight,
             amount > 0
-              ? `We keep a ${formatCents(p.safetyBuffer)} cushion, which leaves ${formatCents(amount)} you can safely move to your goal.`
-              : `After a ${formatCents(p.safetyBuffer)} cushion there's nothing extra this time, and that's okay.`,
+              ? `After a ${formatCents(p.safetyBuffer)} cushion, you have ${formatCents(amount)} in remaining money you could move to your goal.`
+              : `After a ${formatCents(p.safetyBuffer)} cushion there's no remaining money this time, and that's okay.`,
           ],
           explanationSource: "template",
           nextPayday: isoDate(payday),
@@ -235,6 +235,8 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
             projectedSpending: p.projectedSpending,
             safetyBuffer: p.safetyBuffer,
           },
+          history: [], // TODO(frontend): mock data for the remaining-money chart
+          trackRecord: null,
         };
       }),
 

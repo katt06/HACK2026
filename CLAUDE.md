@@ -23,7 +23,7 @@
 
 ## Data model
 - users/{uid}: displayName, baselineSpendByCategory, settings
-- goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation, pausedUntil, createdAt
+- goals/{id}: ownerId, name, targetAmount, currentAmount, deadline, verified, sizingRecommendation, pausedUntil, createdAt, autoSave?, autoSaveLastRunOn? (autoSave* are server-only, set via setAutoSave)
 - goals/{id}/entries/{id}: kind (contribution | expense), amount, note, createdAt; contributions have verified (clients can only write false); expenses have choice (pause | lowerPace), weeksLater
 - accounts/{uid} (server-only): userId, currentBalance, asOf
 - transactions/{id} (server-only): userId, amount, category, merchant, date, recurringId
@@ -36,7 +36,7 @@
 - scoreViewers/{uid} (server-only): uids[] of everyone who shares a group with uid; lets rules check score access
 
 ## Callable functions (contract)
-getSafeToSave, getChallenges, completeChallenge, getLeaderboard, joinGroup
+getSafeToSave (shown as "remaining money"), getChallenges, acceptChallenge, completeChallenge, getLeaderboard, joinGroup, addToGoal, setAutoSave
 
 ## Conventions
 - Small, pure, unit-tested functions for the logic (forecast, scoring, recurring, bandit). Use Vitest.
