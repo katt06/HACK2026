@@ -58,7 +58,12 @@ export const CHALLENGE_TYPES = [
 export type ChallengeType = (typeof CHALLENGE_TYPES)[number];
 
 export type Difficulty = "easy" | "medium" | "hard";
+
+// Points are fixed by difficulty (never chosen by the LLM), so generated challenges can't inflate the leaderboard.
+export const CHALLENGE_POINTS = { easy: 30, medium: 50, hard: 80 } as const satisfies Record<Difficulty, number>;
+
 // active = offered; accepted = the user said "I'm in" (counts as a bandit attempt); then completed.
+// Offers left for a week expire: ignored ones count as a failed attempt too.
 export type ChallengeStatus = "active" | "accepted" | "completed" | "skipped" | "expired";
 
 // Where generated copy came from. "template" is the rate-limit / failure fallback.
@@ -284,6 +289,11 @@ export function evaluateBadges(stats: BadgeStats, alreadyEarned: readonly BadgeI
     const earned = alreadyEarned.includes(id) || value[id] >= goal;
     return { id, earned, progress: earned ? goal : Math.min(goal, value[id]), goal };
   });
+}
+
+// rateLimits/{uid} (server-only): LLM calls in the last hour, for the per-user limit.
+export interface RateLimitDoc {
+  llmCalls: IsoDateTime[];
 }
 
 // scoreViewers/{uid} (server-only): everyone who shares at least one group with uid.

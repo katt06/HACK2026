@@ -1,49 +1,19 @@
 import { initializeApp } from "firebase-admin/app";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
-import type {
-  AcceptChallengeRequest,
-  AcceptChallengeResponse,
-  CompleteChallengeRequest,
-  CompleteChallengeResponse,
-  GetChallengesRequest,
-  GetChallengesResponse,
-  HealthResponse,
-} from "./contract.js";
-import { acceptChallengeStub, challengesStub, completeChallengeStub } from "./stubs.js";
-import { requireAuth, requireString } from "./validate.js";
+import { onCall } from "firebase-functions/v2/https";
+import type { HealthResponse } from "./contract.js";
 
 initializeApp();
 
+export { acceptChallenge } from "./acceptChallenge.js";
+export { getChallenges } from "./challenges.js";
+export { completeChallenge } from "./completeChallenge.js";
 export { joinGroup } from "./groups.js";
-export { refreshRecurring } from "./recurringJob.js";
 export { getLeaderboard } from "./leaderboard.js";
+export { refreshRecurring } from "./recurringJob.js";
 export { getSafeToSave } from "./safeToSave.js";
 export { onChallengeWritten, onGoalEntryWritten, onGoalWritten, refreshScores } from "./scoreStore.js";
 export { syncScoreViewers } from "./scoreViewers.js";
 
 export const health = onCall((): HealthResponse => {
   return { ok: true, time: new Date().toISOString() };
-});
-
-// TODO: replace stubs with real logic. Response shapes are fixed by contract.ts.
-
-export const getChallenges = onCall<GetChallengesRequest>((request): GetChallengesResponse => {
-  const uid = requireAuth(request);
-  return challengesStub(uid);
-});
-
-export const acceptChallenge = onCall<AcceptChallengeRequest>((request): AcceptChallengeResponse => {
-  const uid = requireAuth(request);
-  const challengeId = requireString(request.data?.challengeId, "challengeId");
-  const result = acceptChallengeStub(uid, challengeId);
-  if (!result) throw new HttpsError("not-found", "Challenge not found.");
-  return result;
-});
-
-export const completeChallenge = onCall<CompleteChallengeRequest>((request): CompleteChallengeResponse => {
-  const uid = requireAuth(request);
-  const challengeId = requireString(request.data?.challengeId, "challengeId");
-  const result = completeChallengeStub(uid, challengeId);
-  if (!result) throw new HttpsError("not-found", "Challenge not found.");
-  return result;
 });

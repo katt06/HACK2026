@@ -5,5 +5,8 @@ functions/lib/
 *.log
 .firebase/
 .env*
+!functions/.env
+# Functions emulator secrets (ANTHROPIC_API_KEY); never commit
+.secret.local
 !.env.example
 .DS_Store

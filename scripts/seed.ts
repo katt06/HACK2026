@@ -7,7 +7,8 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9099";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
-import type { TransactionDoc } from "../functions/src/contract.js";
+import type { BanditStatsDoc, TransactionDoc } from "../functions/src/contract.js";
+import { banditStatsId, updateStats } from "../functions/src/logic/bandit.js";
 import { isIsoDate, todayIso } from "../functions/src/logic/dates.js";
 import { assignRecurring } from "../functions/src/logic/recurring.js";
 import { scoreViewersFor } from "../functions/src/logic/scoreViewers.js";
@@ -84,6 +85,14 @@ async function main() {
     user.contributions.forEach((c, i) => writes.push([goalRef.collection("entries").doc(`c${String(i).padStart(2, "0")}`), c]));
 
     user.completedChallenges.forEach((c, i) => writes.push([db.doc(`challenges/${user.uid}-done-${i}`), c]));
+    // The bandit starts from each persona's history, the same way completeChallenge would have recorded it.
+    const stats = new Map<string, BanditStatsDoc>();
+    for (const c of user.completedChallenges) {
+      const id = banditStatsId(user.uid, c);
+      const counts = updateStats(stats.get(id), c.status === "completed");
+      stats.set(id, { userId: user.uid, challengeType: c.type, difficulty: c.difficulty, ...counts });
+    }
+    for (const [id, doc] of stats) writes.push([db.doc(`banditStats/${id}`), doc]);
     // Computed with the functions' scoring code; the seed plans challenge history so that Alex sits just
     // behind Riley and one easy challenge on stage moves Alex ahead and up a level.
     writes.push([db.doc(`scores/${user.uid}`), user.score]);
