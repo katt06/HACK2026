@@ -58,6 +58,9 @@ export const CHALLENGE_TYPES = [
 export type ChallengeType = (typeof CHALLENGE_TYPES)[number];
 
 export type Difficulty = "easy" | "medium" | "hard";
+
+// Points are fixed by difficulty (never chosen by the LLM), so generated challenges can't inflate the leaderboard.
+export const CHALLENGE_POINTS = { easy: 30, medium: 50, hard: 80 } as const satisfies Record<Difficulty, number>;
 export type ChallengeStatus = "active" | "completed" | "skipped" | "expired";
 
 // Where generated copy came from. "template" is the rate-limit / failure fallback.
@@ -233,6 +236,11 @@ export interface ScoreDoc {
   improvementScore: number; // 0–100: % drop in discretionary spend (last 30 days) vs. baseline
   points: number;
   level: number; // starts at 1
+}
+
+// rateLimits/{uid} (server-only): LLM calls in the last hour, for the per-user limit.
+export interface RateLimitDoc {
+  llmCalls: IsoDateTime[];
 }
 
 // scoreViewers/{uid} (server-only): everyone who shares at least one group with uid.

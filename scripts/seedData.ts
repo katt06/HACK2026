@@ -1,6 +1,7 @@
 // Deterministic demo data: 6 months of transactions for 5 personas, plus balances, goals and groups.
 // Pure (no Firestore) so tests can import it. Same seed + same `today` → identical output.
 import {
+  CHALLENGE_POINTS,
   CHALLENGE_TYPES,
   type AccountDoc,
   type Category,
@@ -389,7 +390,6 @@ export function generateSeedUser(uid: PersonaId, today: IsoDate, seed = SEED): S
 
 // ---------- Points and the leaderboard demo ----------
 
-const POINTS_BY_DIFFICULTY: Record<Difficulty, number> = { easy: 30, medium: 50, hard: 80 };
 const COMPLETED_DESCRIPTIONS: Record<ChallengeType, string> = {
   no_spend_day: "Have one no-spend day this week.",
   cook_at_home: "Cook dinner at home three nights this week.",
@@ -431,7 +431,7 @@ function completedChallenges(uid: PersonaId, difficulties: Difficulty[], today: 
       userId: uid,
       type,
       description: COMPLETED_DESCRIPTIONS[type],
-      points: POINTS_BY_DIFFICULTY[difficulty],
+      points: CHALLENGE_POINTS[difficulty],
       difficulty,
       status: "completed",
       createdAt: `${addDays(completedOn, -3)}T13:00:00.000Z`,
