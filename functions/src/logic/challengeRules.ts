@@ -67,3 +67,15 @@ export function toCandidates(raw: unknown[]): ChallengeCandidate[] {
 export function mergeCandidates(llm: ChallengeCandidate[], templates: ChallengeCandidate[], needed: number): ChallengeCandidate[] {
   return llm.length >= needed ? llm : [...llm, ...templates];
 }
+
+// Two getChallenges calls can overlap (the dashboard and the Challenges page on a first visit, while Claude
+// is still writing). Each generates on its own, so right before saving we re-read what's open and keep only
+// enough picks to fill the free slots, skipping any (type, difficulty) already on screen.
+export function fillOpenSlots<T extends { type: ChallengeType; difficulty: Difficulty }>(
+  open: readonly { type: ChallengeType; difficulty: Difficulty }[],
+  picks: readonly T[],
+  max: number,
+): T[] {
+  const shown = new Set(open.map((c) => `${c.type}_${c.difficulty}`));
+  return picks.filter((c) => !shown.has(`${c.type}_${c.difficulty}`)).slice(0, Math.max(0, max - open.length));
+}

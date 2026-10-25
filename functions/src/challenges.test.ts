@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { generateSeedUser } from "../../scripts/seedData.js";
 import { CHALLENGE_POINTS, CHALLENGE_TYPES } from "./contract.js";
-import { mergeCandidates, toCandidates, violatesGuardrails } from "./logic/challengeRules.js";
+import { fillOpenSlots, mergeCandidates, toCandidates, violatesGuardrails } from "./logic/challengeRules.js";
 import { takeRateLimitSlot } from "./logic/rateLimit.js";
 import { normalizeMerchant } from "./logic/recurring.js";
 import { buildSpendingSummary, summaryToText, topRisingTrend } from "./logic/spendingSummary.js";
@@ -196,5 +196,23 @@ describe("what the bandit has learned, for the prompt", () => {
     expect(withHistory).toContain("<history>\n- usually finishes easy challenges (5 of 6)\n</history>");
     expect(challengeUserMessage(["coffee: $48"])).not.toContain("<history>");
     expect(describeWhatWorks([stat("cook_at_home", "easy", 5, 5)]).join(" ")).not.toMatch(/\$/);
+  });
+});
+
+describe("overlapping getChallenges calls", () => {
+  const card = (type: (typeof CHALLENGE_TYPES)[number], difficulty: "easy" | "medium" | "hard") => ({ type, difficulty });
+  const picks = [card("cook_at_home", "easy"), card("brew_at_home", "medium"), card("transit_swap", "hard")];
+
+  it("fills every slot when nothing is open", () => {
+    expect(fillOpenSlots([], picks, 3)).toEqual(picks);
+  });
+
+  it("adds nothing when another call already filled the slots", () => {
+    expect(fillOpenSlots(picks, picks, 3)).toEqual([]);
+  });
+
+  it("fills only the free slots and never repeats an arm that's already open", () => {
+    expect(fillOpenSlots([card("cook_at_home", "easy")], picks, 3)).toEqual([picks[1], picks[2]]);
+    expect(fillOpenSlots([card("no_spend_day", "easy"), card("brew_at_home", "medium")], picks, 3)).toEqual([picks[0]]);
   });
 });

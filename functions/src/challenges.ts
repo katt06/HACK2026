@@ -15,7 +15,7 @@ import type {
 } from "./contract.js";
 import { expireStaleChallenges, loadBanditStats } from "./banditStore.js";
 import { OPEN_STATUSES, pickChallenges } from "./logic/bandit.js";
-import { mergeCandidates, toCandidates, type ChallengeCandidate } from "./logic/challengeRules.js";
+import { fillOpenSlots, mergeCandidates, toCandidates, type ChallengeCandidate } from "./logic/challengeRules.js";
 import { addDays, todayIso } from "./logic/dates.js";
 import { describeWhatWorks } from "./logic/learnedPreferences.js";
 import { takeRateLimitSlot } from "./logic/rateLimit.js";
@@ -36,8 +36,10 @@ const armKey = (c: { type: string; difficulty: string }) => `${c.type}_${c.diffi
 // Oldest first; challenges created together share a timestamp, so the id breaks ties for a stable order.
 const byCreated = (a: WithId<ChallengeDoc>, b: WithId<ChallengeDoc>) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 
+const activeQuery = (db: Firestore, uid: string) => db.collection("challenges").where("userId", "==", uid).where("status", "in", [...OPEN_STATUSES]);
+
 async function loadActive(db: Firestore, uid: string): Promise<WithId<ChallengeDoc>[]> {
-  const snap = await db.collection("challenges").where("userId", "==", uid).where("status", "in", [...OPEN_STATUSES]).get();
+  const snap = await activeQuery(db, uid).get();
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as ChallengeDoc) })).sort(byCreated);
 }
 
@@ -123,26 +125,28 @@ export const getChallenges = onCall<GetChallengesRequest>(
       needed,
     );
 
+    // Save in a transaction that re-reads what's open, so an overlapping call can't add a second set.
     const now = new Date().toISOString();
-    const batch = db.batch();
-    const created = picks.map((c): WithId<ChallengeDoc> => {
-      const ref = db.collection("challenges").doc();
-      const doc: ChallengeDoc = {
-        userId: uid,
-        type: c.type,
-        description: c.description,
-        points: c.points,
-        difficulty: c.difficulty,
-        status: "active",
-        createdAt: now,
-        completedAt: null,
-        reason: c.reason,
-        source: c.source,
-      };
-      batch.set(ref, doc);
-      return { id: ref.id, ...doc };
+    return db.runTransaction(async (tx) => {
+      const openNow = (await tx.get(activeQuery(db, uid))).docs.map((d) => ({ id: d.id, ...(d.data() as ChallengeDoc) }));
+      const created = fillOpenSlots(openNow, picks, ACTIVE_CHALLENGES).map((c): WithId<ChallengeDoc> => {
+        const ref = db.collection("challenges").doc();
+        const doc: ChallengeDoc = {
+          userId: uid,
+          type: c.type,
+          description: c.description,
+          points: c.points,
+          difficulty: c.difficulty,
+          status: "active",
+          createdAt: now,
+          completedAt: null,
+          reason: c.reason,
+          source: c.source,
+        };
+        tx.set(ref, doc);
+        return { id: ref.id, ...doc };
+      });
+      return { challenges: [...openNow, ...created].sort(byCreated) };
     });
-    await batch.commit();
-    return { challenges: [...active, ...created].sort(byCreated) };
   },
 );
