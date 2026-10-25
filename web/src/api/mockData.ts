@@ -1,6 +1,6 @@
 // Seed data for the mock API: one persona per demo story.
 // Money is in cents and dates are relative to "today" so the demo never goes stale.
-import type { Cents, ChallengeDoc, ScoreDoc } from "@contract";
+import type { Cents, ChallengeDoc, EquippedAvatar, ItemId, ScoreDoc } from "@contract";
 
 export type PersonaId = "delivery-spender" | "irregular-income" | "subscription-creep" | "steady-saver" | "demo-hero";
 
@@ -18,6 +18,8 @@ export interface Persona {
   insight: string; // story-specific line added to the safe-to-save explanation
   score: Omit<ScoreDoc, "userId" | "level">; // level is derived from points
   coins: number; // spendable; lower than XP when some were already spent in the shop
+  inventory: ItemId[]; // shop items already bought (starter sunglasses are always owned)
+  avatar: EquippedAvatar;
   challengesCompleted: number; // lifetime, for the Yuzu Master badge
   // currentAmount is the sum of contributions; chosen so progress matches score.goalProgressPct.
   goal: { name: string; targetAmount: Cents; deadlineInDays: number; contributions: { amount: Cents; daysAgo: number; verified: boolean; note: string }[] };
@@ -56,6 +58,8 @@ export const PERSONAS: Persona[] = [
     insight: "Food delivery has averaged about $95 a week lately, so the forecast leaves room for it for now.",
     score: { goalProgressPct: 31, streak: 2, improvementScore: 44, points: 240 },
     coins: 60,
+    inventory: ["bubble-tea"],
+    avatar: { glasses: "sunglasses", held: "bubble-tea" },
     challengesCompleted: 5,
     goal: {
       name: "Emergency fund",
@@ -119,6 +123,8 @@ export const PERSONAS: Persona[] = [
     insight: "Your income has varied a lot lately, so we use a bigger cushion and assume your next payment arrives on the late side.",
     score: { goalProgressPct: 48, streak: 5, improvementScore: 61, points: 300 },
     coins: 140,
+    inventory: ["straw-hat"],
+    avatar: { glasses: "sunglasses", hat: "straw-hat" },
     challengesCompleted: 11,
     goal: {
       name: "Slow-month cushion",
@@ -188,6 +194,8 @@ export const PERSONAS: Persona[] = [
     insight: "Subscriptions now cost about $133 a month, up from $48 a year ago.",
     score: { goalProgressPct: 22, streak: 1, improvementScore: 38, points: 180 },
     coins: 30,
+    inventory: ["scarf"],
+    avatar: { outfit: "scarf" },
     challengesCompleted: 2,
     goal: {
       name: "New laptop",
@@ -248,6 +256,8 @@ export const PERSONAS: Persona[] = [
     insight: "You've stayed under your usual spending six weeks in a row. Nice work.",
     score: { goalProgressPct: 74, streak: 12, improvementScore: 82, points: 620 },
     coins: 410,
+    inventory: ["tiny-crown", "matcha", "flower-crown"],
+    avatar: { glasses: "sunglasses", hat: "tiny-crown", held: "matcha" },
     challengesCompleted: 24,
     goal: {
       name: "Japan trip",
@@ -314,6 +324,8 @@ export const PERSONAS: Persona[] = [
     // 8 challenges done: two more on stage unlocks Yuzu Master. The first one also levels Alex up to 4.
     score: { goalProgressPct: 42, streak: 4, improvementScore: 70, points: 280 },
     coins: 120,
+    inventory: [],
+    avatar: { glasses: "sunglasses" },
     challengesCompleted: 8,
     goal: {
       name: "Spring break trip",

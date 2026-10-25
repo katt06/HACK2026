@@ -4,6 +4,7 @@ import type { GetLeaderboardResponse, GroupSummary, LeaderboardEntry } from "@co
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { cardClass } from "../components/forms";
+import { Avatar } from "../avatar/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { HerdChart } from "../components/HerdChart";
 import { ProgressBar } from "../components/ProgressBar";
@@ -79,6 +80,7 @@ function Row({ entry, delta, rowRef }: { entry: LeaderboardEntry; delta: number;
     >
       <span className="text-center text-2xl font-extrabold text-ink-faint lg:text-3xl">{entry.rank}</span>
       <span className="flex min-w-0 items-center gap-2">
+        <Avatar avatar={entry.avatar} size={32} className="h-8 w-8 rounded-lg bg-sky-soft lg:h-16 lg:w-16" />
         <span className="truncate font-semibold">{entry.displayName}</span>
         {entry.isMe && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-extrabold text-on-primary">You</span>}
         <RankChange delta={delta} />

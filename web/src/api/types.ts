@@ -1,5 +1,10 @@
 import type {
   AcceptChallengeResponse,
+  AvatarSlot,
+  EquipItemResponse,
+  EquippedAvatar,
+  ItemId,
+  PurchaseItemResponse,
   Cents,
   BadgeProgress,
   CompleteChallengeResponse,
@@ -31,6 +36,8 @@ export interface GameState {
   xpPerLevel: number;
   coins: number;
   badges: BadgeProgress[];
+  avatar: EquippedAvatar; // what my capybara is wearing
+  owned: ItemId[]; // shop items I own, starter items included
 }
 
 export interface GoalDetail {
@@ -55,6 +62,11 @@ export interface Api {
   getMyScore(): Promise<ScoreDoc | null>; // null until the user has a score doc
   getGameState(): Promise<GameState>;
   getActivity(): Promise<Activity>;
+
+  // Avatar shop. Coins, inventory and the equipped avatar are only ever changed by these server calls.
+  purchaseItem(itemId: ItemId): Promise<PurchaseItemResponse>; // rejects "failed-precondition" if owned or too few coins
+  equipItem(slot: AvatarSlot, itemId: ItemId | null): Promise<EquipItemResponse>; // null takes the slot off
+  getAvatars(uids: string[]): Promise<Record<string, EquippedAvatar>>; // group members' avatars (missing = default)
 
   getMyGroups(): Promise<GroupSummary[]>;
   // Live version: calls onChange now and on every change. Returns an unsubscribe function.

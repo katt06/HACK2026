@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { evaluateBadges, levelProgress, normalizeInviteCode, toGroupSummary } from "./contract.js";
+import {
+  DEFAULT_AVATAR,
+  ITEM_ORDER,
+  SHOP_ITEMS,
+  checkEquip,
+  checkPurchase,
+  evaluateBadges,
+  levelProgress,
+  normalizeInviteCode,
+  ownedItems,
+  toGroupSummary,
+} from "./contract.js";
 
 describe("normalizeInviteCode", () => {
   it("uppercases and strips spaces and dashes", () => {
@@ -48,5 +59,33 @@ describe("evaluateBadges", () => {
   it("keeps a badge earned after the stat drops", () => {
     const res = evaluateBadges({ goalsCreated: 0, streak: 0, challengesCompleted: 0 }, ["chill-streak"]);
     expect(res.find((b) => b.id === "chill-streak")).toEqual({ id: "chill-streak", earned: true, progress: 4, goal: 4 });
+  });
+});
+
+describe("avatar shop", () => {
+  it("always owns the starter sunglasses", () => {
+    expect(ownedItems()).toEqual(["sunglasses"]);
+    expect(ownedItems(["scarf"])).toEqual(["sunglasses", "scarf"]);
+  });
+
+  it("buys an item when there are enough coins, and never twice", () => {
+    expect(checkPurchase(120, [], "straw-hat")).toEqual({ ok: true, coins: 40, inventory: ["straw-hat"] });
+    expect(checkPurchase(80, [], "straw-hat")).toMatchObject({ ok: true, coins: 0 });
+    expect(checkPurchase(79, [], "straw-hat")).toEqual({ ok: false, reason: "insufficient-coins" });
+    expect(checkPurchase(500, ["straw-hat"], "straw-hat")).toEqual({ ok: false, reason: "owned" });
+    expect(checkPurchase(500, [], "sunglasses")).toEqual({ ok: false, reason: "owned" });
+  });
+
+  it("equips owned items in their own slot and takes them off", () => {
+    expect(checkEquip(DEFAULT_AVATAR, ["yuzu-hat"], "hat", "yuzu-hat")).toEqual({ ok: true, avatar: { glasses: "sunglasses", hat: "yuzu-hat" } });
+    expect(checkEquip(DEFAULT_AVATAR, [], "hat", "yuzu-hat")).toEqual({ ok: false, reason: "not-owned" });
+    expect(checkEquip(DEFAULT_AVATAR, ["scarf"], "hat", "scarf")).toEqual({ ok: false, reason: "wrong-slot" });
+    expect(checkEquip(DEFAULT_AVATAR, [], "glasses", null)).toEqual({ ok: true, avatar: {} });
+  });
+
+  it("has the requested prices", () => {
+    expect(Object.fromEntries(ITEM_ORDER.map((id) => [id, SHOP_ITEMS[id].price]))).toEqual({
+      sunglasses: 0, "yuzu-hat": 50, "straw-hat": 80, scarf: 60, matcha: 40, "bubble-tea": 40, "flower-crown": 100, "tiny-crown": 250,
+    });
   });
 });

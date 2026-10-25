@@ -84,6 +84,8 @@ export interface UserDoc {
   // Spendable shop currency (server-written; private to the user). Coins are earned 1:1 with XP but can go
   // down when spent. Until the server tracks it, clients treat a missing value as "all XP, nothing spent".
   coins?: number;
+  // Shop items bought (server-written; private). Starter items are always owned and aren't listed here.
+  inventory?: ItemId[];
 }
 
 // goals/{id}
@@ -243,6 +245,7 @@ export interface ScoreDoc {
   points: number; // XP: never decreases; drives level and leaderboard rank
   level: number; // starts at 1
   badges?: BadgeId[]; // earned badges (server-written; badges stay earned even if a streak later breaks)
+  avatar?: EquippedAvatar; // what the capybara is wearing, shown to the group (server-written); missing = DEFAULT_AVATAR
 }
 
 // ---------- Game layer: levels and badges ----------
@@ -300,6 +303,60 @@ export interface RateLimitDoc {
 // Kept in sync from groups/* so security rules can check score access with a single get().
 export interface ScoreViewersDoc {
   uids: string[];
+}
+
+// ---------- Avatar shop ----------
+
+export type AvatarSlot = "outfit" | "hat" | "glasses" | "held";
+export const AVATAR_SLOTS: readonly AvatarSlot[] = ["outfit", "hat", "glasses", "held"];
+
+export type ItemId = "sunglasses" | "yuzu-hat" | "straw-hat" | "scarf" | "matcha" | "bubble-tea" | "flower-crown" | "tiny-crown";
+
+// Prices live here so the server, not the client, decides what things cost. The pixel art is in web/src/avatar.
+export const SHOP_ITEMS: Record<ItemId, { name: string; slot: AvatarSlot; price: number }> = {
+  sunglasses: { name: "Sunglasses", slot: "glasses", price: 0 },
+  "yuzu-hat": { name: "Yuzu hat", slot: "hat", price: 50 },
+  "straw-hat": { name: "Straw hat", slot: "hat", price: 80 },
+  scarf: { name: "Scarf", slot: "outfit", price: 60 },
+  matcha: { name: "Matcha drink", slot: "held", price: 40 },
+  "bubble-tea": { name: "Bubble tea", slot: "held", price: 40 },
+  "flower-crown": { name: "Flower crown", slot: "hat", price: 100 },
+  "tiny-crown": { name: "Tiny crown", slot: "hat", price: 250 },
+};
+export const ITEM_ORDER = Object.keys(SHOP_ITEMS) as ItemId[];
+
+export const STARTER_ITEMS: readonly ItemId[] = ["sunglasses"]; // free and always owned
+export type EquippedAvatar = Partial<Record<AvatarSlot, ItemId>>;
+export const DEFAULT_AVATAR: EquippedAvatar = { glasses: "sunglasses" }; // matches the mascot
+
+export const isItemId = (v: unknown): v is ItemId => typeof v === "string" && v in SHOP_ITEMS;
+export const isAvatarSlot = (v: unknown): v is AvatarSlot => typeof v === "string" && (AVATAR_SLOTS as readonly string[]).includes(v);
+
+export function ownedItems(inventory: readonly ItemId[] = []): ItemId[] {
+  return ITEM_ORDER.filter((id) => STARTER_ITEMS.includes(id) || inventory.includes(id));
+}
+
+export type PurchaseCheck = { ok: true; coins: number; inventory: ItemId[] } | { ok: false; reason: "owned" | "insufficient-coins" };
+
+// The purchase rules, shared by the purchaseItem callable and the mock so they can't disagree.
+export function checkPurchase(coins: number, inventory: readonly ItemId[] = [], itemId: ItemId): PurchaseCheck {
+  if (ownedItems(inventory).includes(itemId)) return { ok: false, reason: "owned" };
+  const price = SHOP_ITEMS[itemId].price;
+  if (coins < price) return { ok: false, reason: "insufficient-coins" };
+  return { ok: true, coins: coins - price, inventory: [...inventory, itemId] };
+}
+
+export type EquipCheck = { ok: true; avatar: EquippedAvatar } | { ok: false; reason: "not-owned" | "wrong-slot" };
+
+// itemId null takes off whatever is in that slot.
+export function checkEquip(avatar: EquippedAvatar, inventory: readonly ItemId[] = [], slot: AvatarSlot, itemId: ItemId | null): EquipCheck {
+  if (itemId === null) {
+    const { [slot]: _, ...rest } = avatar;
+    return { ok: true, avatar: rest };
+  }
+  if (SHOP_ITEMS[itemId].slot !== slot) return { ok: false, reason: "wrong-slot" };
+  if (!ownedItems(inventory).includes(itemId)) return { ok: false, reason: "not-owned" };
+  return { ok: true, avatar: { ...avatar, [slot]: itemId } };
 }
 
 // ---------- Callables ----------
@@ -397,6 +454,26 @@ export interface JoinGroupResponse {
   alreadyMember: boolean;
 }
 
+// purchaseItem: spends coins on a shop item. The only way coins go down or inventory grows.
+export interface PurchaseItemRequest {
+  itemId: ItemId;
+}
+
+export interface PurchaseItemResponse {
+  coins: number; // balance after buying
+  owned: ItemId[]; // everything owned, starter items included
+}
+
+// equipItem: puts an owned item in a slot (itemId null takes it off). Saved on scores/{uid} so the group sees it.
+export interface EquipItemRequest {
+  slot: AvatarSlot;
+  itemId: ItemId | null;
+}
+
+export interface EquipItemResponse {
+  avatar: EquippedAvatar;
+}
+
 // Name → request/response map, for a typed client helper.
 export interface Callables {
   getSafeToSave: { request: GetSafeToSaveRequest; response: GetSafeToSaveResponse };
@@ -405,6 +482,8 @@ export interface Callables {
   completeChallenge: { request: CompleteChallengeRequest; response: CompleteChallengeResponse };
   getLeaderboard: { request: GetLeaderboardRequest; response: GetLeaderboardResponse };
   joinGroup: { request: JoinGroupRequest; response: JoinGroupResponse };
+  purchaseItem: { request: PurchaseItemRequest; response: PurchaseItemResponse };
+  equipItem: { request: EquipItemRequest; response: EquipItemResponse };
 }
 export type CallableName = keyof Callables;
 

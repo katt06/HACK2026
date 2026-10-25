@@ -218,5 +218,6 @@ export function rankLeaderboard(rows: (ScoreDoc & { displayName: string })[], vi
       improvementScore: r.improvementScore,
       points: r.points,
       level: r.level,
+      ...(r.avatar && { avatar: r.avatar }),
     }));
 }

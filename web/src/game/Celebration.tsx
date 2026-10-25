@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import confetti from "canvas-confetti";
-import { BADGES, type BadgeId } from "@contract";
+import { BADGES, type BadgeId, type EquippedAvatar } from "@contract";
+import { Avatar, describeAvatar } from "../avatar/Avatar";
 import { BadgeArt } from "./Badges";
 
 export type CelebrationItem = { kind: "level"; level: number } | { kind: "badge"; id: BadgeId };
@@ -19,7 +20,7 @@ function fireConfetti() {
 }
 
 // Full-screen celebration. Tap, click, Enter, Space, or Escape dismisses it.
-export function Celebration({ item, onDismiss }: { item: CelebrationItem; onDismiss: () => void }) {
+export function Celebration({ item, avatar, onDismiss }: { item: CelebrationItem; avatar?: EquippedAvatar; onDismiss: () => void }) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -66,7 +67,10 @@ export function Celebration({ item, onDismiss }: { item: CelebrationItem; onDism
       transition={{ duration: 0.25 }}
     >
       {item.kind === "level" ? (
-        <motion.img {...pop} src="/brand/icon-sticker.png" alt="Your capybara" className="h-44 w-44 object-contain drop-shadow-2xl lg:h-56 lg:w-56" />
+        // Your own pixel capybara, outfit and all, on a sky tile.
+        <motion.div {...pop} className="rounded-[2rem] border-4 border-coin bg-sky p-3 shadow-2xl">
+          <Avatar avatar={avatar} size={160} className="h-40 w-40 lg:h-56 lg:w-56" label={avatar ? describeAvatar(avatar) : "Your capybara"} />
+        </motion.div>
       ) : (
         <motion.div {...pop} className="rounded-full border-4 border-coin bg-cream p-3 shadow-2xl">
           <BadgeArt id={item.id} className="h-36 w-36 lg:h-48 lg:w-48" />

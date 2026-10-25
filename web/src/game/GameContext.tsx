@@ -49,6 +49,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           <Celebration
             key={current.kind === "level" ? `level-${current.level}` : `badge-${current.id}`}
             item={current}
+            avatar={state?.avatar}
             onDismiss={() => setQueue((q) => q.slice(1))}
           />
         )}

@@ -79,7 +79,7 @@ describe("getLeaderboard", () => {
     const { entries } = await api.getLeaderboard("g");
     expect(entries).toHaveLength(PERSONAS.length);
     expect(entries.map((e) => e.rank)).toEqual([1, 2, 3, 4, 5]);
-    const allowed = ["userId", "displayName", "rank", "isMe", "goalProgressPct", "streak", "improvementScore", "points", "level"].sort();
+    const allowed = ["userId", "displayName", "rank", "isMe", "goalProgressPct", "streak", "improvementScore", "points", "level", "avatar"].sort();
     for (const e of entries) {
       expect(Object.keys(e).sort()).toEqual(allowed);
       expect(e.level).toBe(levelFor(e.points));
@@ -332,5 +332,36 @@ describe("getActivity", () => {
     await api.completeChallenge(first.id);
     const after = await api.getActivity();
     expect(after.completedChallenges.at(-1)).toMatchObject({ id: first.id, completedAt: NOW.toISOString() });
+  });
+});
+
+describe("avatar shop", () => {
+  it("Alex starts with sunglasses on and 120 coins", async () => {
+    const { api } = setup();
+    expect(await api.getGameState()).toMatchObject({ coins: 120, owned: ["sunglasses"], avatar: { glasses: "sunglasses" } });
+  });
+
+  it("buys, equips, and shows the new look on the leaderboard and to the group", async () => {
+    const { api } = setup();
+    expect(await api.purchaseItem("yuzu-hat")).toEqual({ coins: 70, owned: ["sunglasses", "yuzu-hat"] });
+    expect(await api.equipItem("hat", "yuzu-hat")).toEqual({ avatar: { glasses: "sunglasses", hat: "yuzu-hat" } });
+    const me = (await api.getLeaderboard("g")).entries.find((e) => e.isMe)!;
+    expect(me.avatar).toEqual({ glasses: "sunglasses", hat: "yuzu-hat" });
+    expect((await api.getAvatars([me.userId]))[me.userId]).toEqual(me.avatar);
+    expect(await api.getGameState()).toMatchObject({ coins: 70, avatar: { hat: "yuzu-hat" } });
+  });
+
+  it("rejects buying without enough coins, buying twice, and equipping what you don't own", async () => {
+    const { api } = setup();
+    await expect(api.purchaseItem("tiny-crown")).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    await api.purchaseItem("matcha");
+    await expect(api.purchaseItem("matcha")).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    await expect(api.equipItem("hat", "straw-hat")).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    expect((await api.getGameState()).coins).toBe(80);
+  });
+
+  it("takes an item off", async () => {
+    const { api } = setup();
+    expect(await api.equipItem("glasses", null)).toEqual({ avatar: {} });
   });
 });

@@ -13,6 +13,8 @@ import { BadgeTile } from "../game/Badges";
 import { Celebration, type CelebrationItem } from "../game/Celebration";
 import { CoinCounter } from "../game/CoinCounter";
 import { LevelBar } from "../game/LevelBar";
+import { Avatar } from "../avatar/Avatar";
+import { ITEM_ORDER, SHOP_ITEMS } from "@contract";
 
 // Re-render when the theme changes (toggle or system), so swatches show live values.
 function useThemeVersion(): number {
@@ -423,6 +425,23 @@ export default function Styleguide() {
           <EmptyState mascot="sitting" title="No goals yet" action={<Button>Create a goal</Button>}>
             Pick something you'd love to have in a few months.
           </EmptyState>
+        </div>
+      </Section>
+
+      <Section title="Pixel avatar" note="32×32 grid, rendered at whole multiples so every pixel stays square and sharp.">
+        <div className="card flex flex-wrap items-end gap-6 p-5">
+          {[32, 64, 128].map((size) => (
+            <div key={size} className="text-center">
+              <Avatar size={size} className="rounded-xl bg-sky-soft" />
+              <p className="mt-1 text-xs font-extrabold text-ink-muted">{size}px</p>
+            </div>
+          ))}
+          {ITEM_ORDER.filter((id) => id !== "sunglasses").map((id) => (
+            <div key={id} className="text-center">
+              <Avatar avatar={{ glasses: "sunglasses", [SHOP_ITEMS[id].slot]: id }} size={64} className="rounded-xl bg-sky-soft" />
+              <p className="mt-1 text-xs font-extrabold text-ink-muted">{SHOP_ITEMS[id].name}</p>
+            </div>
+          ))}
         </div>
       </Section>
 

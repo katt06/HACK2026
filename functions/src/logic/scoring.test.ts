@@ -224,6 +224,11 @@ describe("rankLeaderboard", () => {
     const allowed = ["userId", "displayName", "rank", "isMe", "goalProgressPct", "streak", "improvementScore", "points", "level"];
     expect(Object.keys(rankLeaderboard([leaky], "a")[0]).sort()).toEqual(allowed.sort());
   });
+
+  it("passes the equipped avatar through so the group can see it", () => {
+    const entry = rankLeaderboard([row("a", "Ana", { avatar: { hat: "straw-hat" } })], "a")[0];
+    expect(entry.avatar).toEqual({ hat: "straw-hat" });
+  });
 });
 
 describe("safe-to-save history", () => {

@@ -1,7 +1,11 @@
 // In-memory mock of the callables. State resets on page reload.
 import { FirebaseError } from "firebase/app";
 import {
+  DEFAULT_AVATAR,
   MAX_GROUP_MEMBERS,
+  checkEquip,
+  checkPurchase,
+  ownedItems,
   evaluateBadges,
   levelProgress,
   normalizeInviteCode,
@@ -9,6 +13,7 @@ import {
   GOAL_NAME_MAX,
   type ChallengeDoc,
   type CompleteChallengeResponse,
+  type ItemId,
   type GoalDoc,
   type GoalEntryDoc,
   type GetLeaderboardResponse,
@@ -52,6 +57,7 @@ export interface MockControls {
 interface PersonaState {
   score: ScoreDoc;
   coins: number;
+  inventory: ItemId[];
   challengesCompleted: number;
   history: Activity["completedChallenges"]; // dated completions for the calendar
   active: WithId<ChallengeDoc>[];
@@ -167,8 +173,9 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
       PERSONAS.map((p) => [
         p.id,
         {
-          score: { ...p.score, userId: uidFor(p.id), level: levelFor(p.score.points) },
+          score: { ...p.score, userId: uidFor(p.id), level: levelFor(p.score.points), avatar: p.avatar },
           coins: p.coins,
+          inventory: [...p.inventory],
           challengesCompleted: p.challengesCompleted,
           history: mockChallengeHistory(p, now()),
           active: [0, 1, 2].map((i) => challengeFrom(p, i, createdAt)),
@@ -313,6 +320,8 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           ...levelProgress(s.score.points),
           coins: s.coins,
           badges: evaluateBadges({ goalsCreated, streak: s.score.streak, challengesCompleted: s.challengesCompleted }),
+          avatar: s.score.avatar ?? DEFAULT_AVATAR,
+          owned: ownedItems(s.inventory),
         };
       }),
 
@@ -327,6 +336,39 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           ),
           streak: s.score.streak,
         };
+      }),
+
+    // Same rules as the purchaseItem / equipItem callables (both use the contract's checks).
+    purchaseItem: (itemId) =>
+      respond("purchaseItem", () => {
+        const s = mine();
+        const result = checkPurchase(s.coins, s.inventory, itemId);
+        if (!result.ok) {
+          throw new FirebaseError("functions/failed-precondition", result.reason === "owned" ? "You already have this one." : "Not enough coins yet.");
+        }
+        s.coins = result.coins;
+        s.inventory = result.inventory;
+        return { coins: s.coins, owned: ownedItems(s.inventory) };
+      }),
+
+    equipItem: (slot, itemId) =>
+      respond("equipItem", () => {
+        const s = mine();
+        const result = checkEquip(s.score.avatar ?? DEFAULT_AVATAR, s.inventory, slot, itemId);
+        if (!result.ok) {
+          throw new FirebaseError("functions/failed-precondition", result.reason === "not-owned" ? "Buy this item first." : "That item doesn't go there.");
+        }
+        s.score = { ...s.score, avatar: result.avatar };
+        return { avatar: result.avatar };
+      }),
+
+    getAvatars: (uids) =>
+      respond("getAvatars", () => {
+        const avatarOf = (uid: string) => {
+          const p = PERSONAS.find((x) => uidFor(x.id) === uid);
+          return (p && state.get(p.id)!.score.avatar) || DEFAULT_AVATAR;
+        };
+        return Object.fromEntries(uids.map((uid) => [uid, avatarOf(uid)]));
       }),
 
     acceptChallenge: (challengeId) =>

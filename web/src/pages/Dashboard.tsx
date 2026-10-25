@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { GetSafeToSaveResponse, GoalDoc, ScoreDoc, WithId } from "@contract";
 import { api } from "../api";
 import { ActivityCalendar } from "../components/ActivityCalendar";
+import { Avatar, describeAvatar } from "../avatar/Avatar";
 import { useAuth } from "../auth/AuthContext";
 import { Difficulty } from "../components/Difficulty";
 import { cardClass } from "../components/forms";
@@ -333,12 +334,30 @@ function ChallengesSection() {
   );
 }
 
+// My capybara next to the greeting, with a way into the shop.
+function Greeting({ firstName }: { firstName?: string }) {
+  const { state } = useGame();
+  return (
+    <div className="flex items-center gap-4">
+      <Link to="/shop" className="rounded-2xl bg-sky-soft p-1 transition-transform hover:-rotate-3" aria-label="Your capybara. Open the shop">
+        {state ? <Avatar avatar={state.avatar} size={64} label={describeAvatar(state.avatar)} /> : <Skeleton className="h-16 w-16" />}
+      </Link>
+      <div className="min-w-0 flex-1">
+        <h1 className="text-2xl font-extrabold lg:text-4xl">{firstName ? `Hi, ${firstName}` : "Hi there"}</h1>
+        <Link to="/shop" className="text-sm font-extrabold text-link">
+          Dress up your capy →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const firstName = user?.displayName?.split(" ")[0];
   return (
     <div className="space-y-4 lg:space-y-6">
-      <h1 className="text-2xl font-extrabold lg:text-4xl">{firstName ? `Hi, ${firstName}` : "Hi there"}</h1>
+      <Greeting firstName={firstName} />
       <SafeToSaveCard />
       <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
         <div className="lg:col-span-2">

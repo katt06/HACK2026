@@ -15,7 +15,9 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import {
+  DEFAULT_AVATAR,
   evaluateBadges,
+  ownedItems,
   levelProgress,
   toGroupSummary,
   type CallableName,
@@ -76,6 +78,8 @@ export const realApi: Api = {
       ...levelProgress(xp),
       coins: (userSnap.exists() ? (userSnap.data() as UserDoc).coins : undefined) ?? xp,
       badges: evaluateBadges({ goalsCreated: goals.size, streak: score?.streak ?? 0, challengesCompleted: completed }, score?.badges ?? []),
+      avatar: score?.avatar ?? DEFAULT_AVATAR,
+      owned: ownedItems(userSnap.exists() ? (userSnap.data() as UserDoc).inventory : []),
     };
   },
   // All of this is my own data, which rules let me read directly.
@@ -100,6 +104,18 @@ export const realApi: Api = {
       contributions: entries.flat().map((e) => ({ goalName: e.goalName, amount: e.amount, createdAt: e.createdAt })),
       streak: scoreSnap.exists() ? (scoreSnap.data() as ScoreDoc).streak : 0,
     };
+  },
+  purchaseItem: (itemId) => call("purchaseItem", { itemId }),
+  equipItem: (slot, itemId) => call("equipItem", { slot, itemId }),
+  // Rules let group members get each other's score doc, which is where the avatar lives.
+  async getAvatars(uids) {
+    const entries = await Promise.all(
+      uids.map(async (uid) => {
+        const snap = await getDoc(doc(db, "scores", uid)).catch(() => null);
+        return [uid, (snap?.data() as ScoreDoc | undefined)?.avatar ?? DEFAULT_AVATAR] as const;
+      }),
+    );
+    return Object.fromEntries(entries);
   },
   async getMyScore() {
     const snap = await getDoc(doc(db, "scores", signedInUser().uid));

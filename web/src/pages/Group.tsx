@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import type { GroupSummary } from "@contract";
+import type { EquippedAvatar, GroupSummary } from "@contract";
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { JoinGroupForm } from "../components/JoinGroupForm";
 import { EmptyState } from "../components/EmptyState";
+import { Avatar } from "../avatar/Avatar";
 import { inviteLink } from "../lib/inviteCode";
 
 const card = "card p-5 lg:p-8";
@@ -43,7 +44,7 @@ function InviteBox({ group }: { group: GroupSummary }) {
   );
 }
 
-function GroupCard({ group, fresh }: { group: GroupSummary; fresh: Set<string> }) {
+function GroupCard({ group, fresh, avatars }: { group: GroupSummary; fresh: Set<string>; avatars: Record<string, EquippedAvatar> }) {
   return (
     <section className={card}>
       <div className="flex items-baseline justify-between gap-4">
@@ -59,9 +60,7 @@ function GroupCard({ group, fresh }: { group: GroupSummary; fresh: Set<string> }
               key={m.userId}
               className={`-mx-2 flex items-center gap-3 rounded-xl px-2 py-1 transition-colors duration-1000 ${fresh.has(m.userId) ? "bg-primary-soft" : ""}`}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 font-semibold text-ink-muted">
-                {m.displayName.charAt(0).toUpperCase()}
-              </span>
+              <Avatar avatar={avatars[m.userId]} size={32} className="rounded-lg bg-sky-soft" />
               <span className="font-medium">{m.displayName}</span>
               {m.isMe && <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-extrabold text-heading">You</span>}
             </li>
@@ -118,8 +117,16 @@ export default function Group() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [fresh, setFresh] = useState<Set<string>>(new Set()); // userIds that just joined
+  const [avatars, setAvatars] = useState<Record<string, EquippedAvatar>>({});
   const previous = useRef<GroupSummary[] | null>(null);
   const [notice, setNotice] = useState<string>((location.state as { notice?: string } | null)?.notice ?? "");
+
+  // Everyone's capybara. Refetched when the member list changes; missing ones just show the default look.
+  const memberKey = [...new Set(groups?.flatMap((g) => g.members.map((m) => m.userId)) ?? [])].sort().join(",");
+  useEffect(() => {
+    if (!memberKey) return;
+    api.getAvatars(memberKey.split(",")).then(setAvatars, (err) => console.error(err));
+  }, [memberKey]);
 
   // Live member list: announce and briefly highlight anyone who joins one of my groups.
   useEffect(() => {
@@ -172,7 +179,7 @@ export default function Group() {
             Start a group below, or join a friend's with their code.
           </EmptyState>
         )}
-        {groups?.map((g) => <GroupCard key={g.id} group={g} fresh={fresh} />)}
+        {groups?.map((g) => <GroupCard key={g.id} group={g} fresh={fresh} avatars={avatars} />)}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <section className={card}>

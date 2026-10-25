@@ -41,7 +41,8 @@ export async function recomputeScore(db: Firestore, uid: string): Promise<ScoreD
       : undefined,
     previousBadges: (scoreSnap.data() as ScoreDoc | undefined)?.badges,
   });
-  await db.doc(`scores/${uid}`).set(score);
+  // Merge so fields this doesn't compute (the equipped avatar) are kept.
+  await db.doc(`scores/${uid}`).set(score, { merge: true });
   return score;
 }
 
