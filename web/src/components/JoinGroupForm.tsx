@@ -45,10 +45,10 @@ export function JoinGroupForm({ initialCode = "", onJoined }: { initialCode?: st
         autoComplete="off"
         spellCheck={false}
         aria-label="Invite code"
-        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center font-mono text-2xl tracking-[0.3em] uppercase outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+        className="field text-center font-mono text-2xl tracking-[0.3em] uppercase"
       />
-      {error && <p className="text-sm text-rose-600">{error}</p>}
-      <button type="submit" disabled={busy} className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <button type="submit" disabled={busy} className="btn btn-primary w-full">
         {busy ? "Joining…" : "Join group"}
       </button>
     </form>

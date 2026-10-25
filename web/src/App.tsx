@@ -11,12 +11,14 @@ import Join from "./pages/Join";
 import Leaderboard from "./pages/Leaderboard";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Styleguide from "./pages/Styleguide";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/demo" element={<Demo />} />
+      <Route path="/styleguide" element={<Styleguide />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />

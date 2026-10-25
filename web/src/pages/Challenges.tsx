@@ -3,6 +3,7 @@ import type { ChallengeDoc, ScoreDoc, WithId } from "@contract";
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { Difficulty } from "../components/Difficulty";
+import { EmptyState } from "../components/EmptyState";
 import { cardClass } from "../components/forms";
 import { PointsBurst } from "../components/PointsBurst";
 import { Skeleton } from "../components/Skeleton";
@@ -17,9 +18,9 @@ function ScorePill({ score }: { score: ScoreDoc | null }) {
   const points = useCountUp(score?.points ?? 0);
   if (!score) return null;
   return (
-    <div className="rounded-2xl bg-white px-4 py-2 text-right shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Level {score.level}</p>
-      <p className="text-xl font-bold tabular-nums text-emerald-600 lg:text-2xl">{points} pts</p>
+    <div className="card px-4 py-2 text-right">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Level {score.level}</p>
+      <p className="text-xl font-extrabold tabular-nums text-link lg:text-2xl">{points} pts</p>
     </div>
   );
 }
@@ -53,12 +54,12 @@ function ChallengeCard({
   }
 
   return (
-    <li className={`relative flex flex-col rounded-3xl p-5 shadow-sm transition-colors lg:p-6 ${done ? "bg-emerald-50 ring-2 ring-emerald-500" : "bg-white"}`}>
+    <li className={`relative flex flex-col rounded-2xl border-2 p-5 transition-colors lg:p-6 ${done ? "border-leaf bg-primary-soft" : "border-line bg-surface"}`}>
       {burstKey !== undefined && <PointsBurst key={burstKey} points={challenge.points} />}
 
       <div className="flex items-center justify-between">
         <Difficulty level={challenge.difficulty} />
-        <span className="text-sm font-bold text-emerald-600">+{challenge.points} pts</span>
+        <span className="text-sm font-extrabold text-link">+{challenge.points} pts</span>
       </div>
 
       <p className="mt-3 flex-1 text-lg font-semibold leading-snug lg:text-xl">{challenge.description}</p>
@@ -66,22 +67,22 @@ function ChallengeCard({
       <button
         onClick={() => setShowWhy(!showWhy)}
         aria-expanded={showWhy}
-        className="mt-3 self-start text-sm font-semibold text-slate-500 hover:text-slate-800"
+        className="mt-3 self-start text-sm font-semibold text-ink-muted hover:text-ink"
       >
         Why this challenge? <span aria-hidden>{showWhy ? "▴" : "▾"}</span>
       </button>
-      {showWhy && <p className="mt-1 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{challenge.reason}</p>}
+      {showWhy && <p className="mt-1 rounded-xl bg-surface-2 p-3 text-sm text-ink-muted">{challenge.reason}</p>}
 
       <div className="mt-4">
         {done ? (
-          <p className="rounded-xl bg-emerald-600 px-4 py-3 text-center font-semibold text-white">Done! +{challenge.points} pts</p>
+          <p className="rounded-2xl bg-coin px-4 py-3 text-center font-extrabold text-on-coin">Done! +{challenge.points} pts</p>
         ) : challenge.status === "accepted" ? (
           <div className="space-y-2">
-            <p className="text-center text-xs font-semibold uppercase tracking-wide text-emerald-700">You're in</p>
+            <p className="text-center text-xs font-semibold uppercase tracking-wide text-link">You're in</p>
             <button
               onClick={() => run(onComplete)}
               disabled={busy}
-              className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="btn btn-coin w-full"
             >
               {busy ? "Saving…" : "Mark complete"}
             </button>
@@ -90,12 +91,12 @@ function ChallengeCard({
           <button
             onClick={() => run(onAccept)}
             disabled={busy}
-            className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+            className="btn btn-primary w-full"
           >
             {busy ? "Saving…" : "Accept challenge"}
           </button>
         )}
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </div>
     </li>
   );
@@ -139,7 +140,7 @@ export default function Challenges() {
     replace(res.challenge);
     setScore(res.score);
     setBursts((b) => ({ ...b, [c.id]: Date.now() }));
-    setNotice(res.leveledUp ? `Level ${res.score.level}! You earned ${res.pointsAwarded} points.` : `Nice! +${res.pointsAwarded} points.`);
+    setNotice(res.leveledUp ? `Level ${res.score.level}! You earned ${res.pointsAwarded} points.` : `Nice and steady. +${res.pointsAwarded} points.`);
   }
 
   function refresh() {
@@ -160,7 +161,7 @@ export default function Challenges() {
 
       <div className="mb-4 flex items-center justify-between gap-3">
         {notice ? (
-          <p role="status" className="rounded-xl bg-emerald-600 px-4 py-2 font-medium text-white">
+          <p role="status" className="rounded-2xl border-2 border-mint bg-primary-soft px-4 py-2 font-extrabold text-heading">
             {notice}
           </p>
         ) : (
@@ -169,7 +170,7 @@ export default function Challenges() {
         <button
           onClick={refresh}
           disabled={cooldown.secondsLeft > 0 || status === "loading"}
-          className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:text-slate-400"
+          className="btn btn-secondary btn-sm shrink-0"
         >
           {cooldown.secondsLeft > 0 ? `Refresh in ${cooldown.secondsLeft}s` : "Refresh"}
         </button>
@@ -178,7 +179,7 @@ export default function Challenges() {
       {status === "loading" && (
         <ul className="grid gap-4 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <li key={i} className="space-y-3 rounded-3xl bg-white p-5 shadow-sm">
+            <li key={i} className="card space-y-3 p-5">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="h-6 w-full" />
               <Skeleton className="h-6 w-2/3" />
@@ -190,8 +191,8 @@ export default function Challenges() {
 
       {status === "failed" && (
         <div className={`${cardClass} text-center`}>
-          <p className="text-slate-600">New challenges are on their way. Check back in a moment.</p>
-          <button onClick={load} className="mt-2 font-semibold text-emerald-600">
+          <p className="text-ink-muted">New challenges are on their way. Check back in a moment.</p>
+          <button onClick={load} className="mt-2 font-semibold text-link">
             Try again
           </button>
         </div>
@@ -200,12 +201,10 @@ export default function Challenges() {
       {status === "ready" && challenges && (
         <>
           {open.length === 0 && (
-            <div className={`${cardClass} mb-4 text-center`}>
-              <p className="text-4xl" aria-hidden>
-                🎉
-              </p>
-              <p className="mt-2 text-lg font-semibold">You've cleared your challenges.</p>
-              <p className="text-slate-500">New ones show up as your spending changes. Check back later or tap Refresh.</p>
+            <div className="mb-4">
+              <EmptyState mascot="drink" title="All done. Time to chill.">
+                New challenges show up as your spending changes. Check back later or tap Refresh.
+              </EmptyState>
             </div>
           )}
           {challenges.length > 0 && (

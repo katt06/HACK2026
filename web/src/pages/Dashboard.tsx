@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Difficulty } from "../components/Difficulty";
 import { cardClass } from "../components/forms";
 import { ProgressRing } from "../components/ProgressRing";
+import { ProgressBar } from "../components/ProgressBar";
 import { Skeleton } from "../components/Skeleton";
 import { TrackRecordChart } from "../components/TrackRecordChart";
 import { todayIso } from "../lib/dates";
@@ -16,8 +17,8 @@ import { useAsync } from "../lib/useAsync";
 function Fallback({ children, onRetry, dark = false }: { children: ReactNode; onRetry: () => void; dark?: boolean }) {
   return (
     <div>
-      <p className={dark ? "text-emerald-50" : "text-slate-600"}>{children}</p>
-      <button onClick={onRetry} className={`mt-2 text-sm font-semibold ${dark ? "text-white underline" : "text-emerald-600"}`}>
+      <p className={dark ? "text-white/90" : "text-ink-muted"}>{children}</p>
+      <button onClick={onRetry} className={`mt-2 text-sm font-semibold ${dark ? "text-white underline" : "text-link"}`}>
         Try again
       </button>
     </div>
@@ -27,9 +28,9 @@ function Fallback({ children, onRetry, dark = false }: { children: ReactNode; on
 function SectionTitle({ children, to }: { children: ReactNode; to?: string }) {
   return (
     <div className="mb-3 flex items-baseline justify-between">
-      <h2 className="text-lg font-bold lg:text-xl">{children}</h2>
+      <h2 className="text-lg font-extrabold lg:text-xl">{children}</h2>
       {to && (
-        <Link to={to} className="text-sm font-semibold text-emerald-600">
+        <Link to={to} className="text-sm font-semibold text-link">
           See all
         </Link>
       )}
@@ -42,7 +43,7 @@ function SectionTitle({ children, to }: { children: ReactNode; to?: string }) {
 function Breakdown({ data }: { data: GetSafeToSaveResponse }) {
   const b = data.breakdown;
   const row = (label: ReactNode, amount: number, sign: "+" | "−", muted = false) => (
-    <div className={`flex justify-between gap-4 ${muted ? "pl-4 text-sm text-emerald-100" : ""}`}>
+    <div className={`flex justify-between gap-4 ${muted ? "pl-4 text-sm text-white/80" : ""}`}>
       <span>{label}</span>
       <span className="tabular-nums">
         {sign} {formatCents(amount)}
@@ -59,7 +60,7 @@ function Breakdown({ data }: { data: GetSafeToSaveResponse }) {
       ))}
       {row("Everyday spending until payday", b.projectedSpending, "−")}
       {row("Safety cushion", b.safetyBuffer, "−")}
-      <div className="flex justify-between gap-4 border-t border-emerald-400 pt-2 font-bold">
+      <div className="flex justify-between gap-4 border-t border-white/30 pt-2 font-extrabold">
         <span>Left over</span>
         <span className="tabular-nums">{formatCents(data.amount)}</span>
       </div>
@@ -72,19 +73,19 @@ function SafeToSaveCard() {
   const [open, setOpen] = useState(false);
 
   return (
-    <section className="rounded-3xl bg-emerald-600 p-6 text-white shadow-sm lg:p-10" aria-busy={state.status === "loading"}>
-      <p className="text-sm font-medium text-emerald-100 lg:text-base">Left over this pay period</p>
+    <section className="rounded-3xl border-2 border-forest bg-forest p-6 text-white lg:p-10" aria-busy={state.status === "loading"}>
+      <p className="text-sm font-medium text-white/80 lg:text-base">Left over this pay period</p>
 
       {state.status === "loading" && (
         <div className="mt-2 space-y-3">
-          <Skeleton className="h-14 w-48 bg-emerald-500 lg:h-20 lg:w-72" />
-          <Skeleton className="h-4 w-36 bg-emerald-500" />
+          <Skeleton className="h-14 w-48 bg-leaf lg:h-20 lg:w-72" />
+          <Skeleton className="h-4 w-36 bg-leaf" />
         </div>
       )}
 
       {state.status === "failed" && (
         <div className="mt-2">
-          <p className="text-3xl font-bold lg:text-5xl">Hang tight</p>
+          <p className="text-3xl font-extrabold lg:text-5xl">Hang tight</p>
           <Fallback onRetry={state.retry} dark>
             We couldn't work out your number just now. Your money is fine; we just need another try.
           </Fallback>
@@ -93,16 +94,16 @@ function SafeToSaveCard() {
 
       {state.status === "ready" && (
         <>
-          <p className="mt-1 text-6xl font-bold tracking-tight lg:text-8xl">{formatCents(state.data.amount)}</p>
-          <p className="mt-2 text-emerald-100 lg:text-lg">
+          <p className="mt-1 text-6xl font-extrabold tracking-tight lg:text-8xl">{formatCents(state.data.amount)}</p>
+          <p className="mt-2 text-white/80 lg:text-lg">
             {state.data.amount > 0
               ? "What's left after bills, everyday spending, and a small cushion. You can move it to a goal without coming up short."
               : "Nothing extra after bills and everyday spending this time, and that's okay."}{" "}
             Next payday {formatDate(state.data.nextPayday)}.
           </p>
           {state.data.history && state.data.history.length > 1 && (
-            <div className="mt-5 rounded-2xl bg-white p-4 text-slate-900 lg:p-6">
-              <p className="mb-2 text-sm font-semibold text-slate-700">Left over, last {state.data.history.length} days</p>
+            <div className="mt-5 rounded-2xl bg-surface p-4 text-ink lg:p-6">
+              <p className="mb-2 text-sm font-semibold text-ink">Left over, last {state.data.history.length} days</p>
               <TrackRecordChart points={state.data.history} />
             </div>
           )}
@@ -110,7 +111,7 @@ function SafeToSaveCard() {
             onClick={() => setOpen(!open)}
             aria-expanded={open}
             aria-controls="why-this-number"
-            className="mt-4 flex items-center gap-1 rounded-full bg-emerald-700/60 px-4 py-2 text-sm font-semibold hover:bg-emerald-700"
+            className="mt-4 flex items-center gap-1 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold"
           >
             Why this number?
             <span aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`}>
@@ -122,14 +123,14 @@ function SafeToSaveCard() {
               <ul className="space-y-2 lg:text-lg">
                 {state.data.explanation.map((line) => (
                   <li key={line} className="flex gap-2">
-                    <span aria-hidden className="text-emerald-200">
+                    <span aria-hidden className="text-mint">
                       •
                     </span>
                     {line}
                   </li>
                 ))}
               </ul>
-              <div className="rounded-2xl bg-emerald-700/40 p-4 lg:p-6">
+              <div className="rounded-2xl bg-white/10 p-4 lg:p-6">
                 <Breakdown data={state.data} />
               </div>
             </div>
@@ -170,11 +171,14 @@ function TopGoalCard() {
 function TopGoalBody({ goal }: { goal: WithId<GoalDoc> | undefined }) {
   if (!goal) {
     return (
-      <div>
-        <p className="text-slate-600">Pick something to save for and we'll work out the weekly pace.</p>
-        <Link to="/goals" className="mt-3 inline-block rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white">
-          Create a goal
-        </Link>
+      <div className="flex items-center gap-4">
+        <img src="/brand/mascot-coin.png" alt="" className="h-20 w-20 shrink-0 object-contain" />
+        <div>
+          <p className="text-ink-muted">Pick something to save for and we'll work out an easy weekly pace.</p>
+          <Link to="/goals" className="btn btn-primary btn-sm mt-3">
+            Create a goal
+          </Link>
+        </div>
       </div>
     );
   }
@@ -191,14 +195,14 @@ function TopGoalBody({ goal }: { goal: WithId<GoalDoc> | undefined }) {
   return (
     <Link to={`/goals/${goal.id}`} className="flex items-center gap-5">
       <ProgressRing pct={pct} size={96} stroke={10}>
-        <span className="text-lg font-bold">{pct}%</span>
+        <span className="text-lg font-extrabold">{pct}%</span>
       </ProgressRing>
       <div className="min-w-0">
-        <p className="truncate text-lg font-bold lg:text-xl">{goal.name}</p>
-        <p className="text-slate-600">
+        <p className="truncate text-lg font-extrabold lg:text-xl">{goal.name}</p>
+        <p className="text-ink-muted">
           {formatCents(goal.currentAmount)} of {formatCents(goal.targetAmount)}
         </p>
-        <p className="text-sm text-slate-500">{pace}</p>
+        <p className="text-sm text-ink-muted">{pace}</p>
       </div>
     </Link>
   );
@@ -210,7 +214,7 @@ function StreakCard() {
   const state = useAsync(api.getMyScore);
   return (
     <section className={cardClass}>
-      <SectionTitle>Streak</SectionTitle>
+      <SectionTitle>Chill streak</SectionTitle>
       {state.status === "loading" && (
         <div className="space-y-2">
           <Skeleton className="h-10 w-24" />
@@ -225,16 +229,21 @@ function StreakCard() {
 
 function StreakBody({ score }: { score: ScoreDoc | null }) {
   if (!score || score.streak === 0) {
-    return <p className="text-slate-600">No streak yet. Hit this week's savings target to start one.</p>;
+    return <p className="text-ink-muted">No streak yet. Hit this week's savings target to start a chill streak.</p>;
   }
   return (
     <div>
-      <p className="whitespace-nowrap text-4xl font-bold lg:text-5xl">
+      <p className="whitespace-nowrap text-4xl font-black text-heading lg:text-5xl">
         <span aria-hidden>🔥</span> {score.streak} {score.streak === 1 ? "week" : "weeks"}
       </p>
-      <p className="mt-1 text-slate-500">
-        Level {score.level} · {score.points} pts
-      </p>
+      <p className="mt-1 text-ink-muted">{score.streak >= 3 ? "Nice and steady." : "Keep it rolling."}</p>
+      <div className="mt-3">
+        <div className="mb-1 flex justify-between text-xs font-extrabold text-ink-muted">
+          <span>Level {score.level}</span>
+          <span>{score.points % 100}/100 pts</span>
+        </div>
+        <ProgressBar pct={score.points % 100} tone="coin" size="sm" label={`Progress to level ${score.level + 1}`} />
+      </div>
     </div>
   );
 }
@@ -249,29 +258,29 @@ function ChallengesSection() {
       <div className="grid gap-3 lg:grid-cols-3">
         {state.status === "loading" &&
           [0, 1, 2].map((i) => (
-            <div key={i} className="space-y-3 rounded-2xl bg-white p-5 shadow-sm">
+            <div key={i} className="card space-y-3 p-5">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-4 w-3/4" />
             </div>
           ))}
         {state.status === "failed" && (
-          <div className="rounded-2xl bg-white p-5 shadow-sm lg:col-span-3">
+          <div className="card p-5 lg:col-span-3">
             <Fallback onRetry={state.retry}>New challenges are on their way.</Fallback>
           </div>
         )}
         {state.status === "ready" && state.data.challenges.length === 0 && (
-          <p className="rounded-2xl bg-white p-5 text-slate-600 shadow-sm lg:col-span-3">You've cleared every challenge. Nice work! Check back tomorrow.</p>
+          <p className="card p-5 text-ink-muted lg:col-span-3">You've cleared every challenge. Time to chill. Check back tomorrow.</p>
         )}
         {state.status === "ready" &&
           state.data.challenges.slice(0, 3).map((c) => (
-            <Link key={c.id} to="/challenges" className="flex flex-col rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+            <Link key={c.id} to="/challenges" className="card flex flex-col p-5 transition-colors hover:border-leaf">
               <div className="flex items-center justify-between">
                 <Difficulty level={c.difficulty} />
-                <span className="text-sm font-bold text-emerald-600">+{c.points} pts</span>
+                <span className="text-sm font-extrabold text-link">+{c.points} pts</span>
               </div>
               <p className="mt-3 font-medium lg:text-lg">{c.description}</p>
-              <p className="mt-1 text-sm text-slate-500">{c.reason}</p>
+              <p className="mt-1 text-sm text-ink-muted">{c.reason}</p>
             </Link>
           ))}
       </div>
@@ -284,7 +293,7 @@ export default function Dashboard() {
   const firstName = user?.displayName?.split(" ")[0];
   return (
     <div className="space-y-4 lg:space-y-6">
-      <h1 className="text-2xl font-bold lg:text-4xl">{firstName ? `Hi, ${firstName}` : "Hi there"}</h1>
+      <h1 className="text-2xl font-extrabold lg:text-4xl">{firstName ? `Hi, ${firstName}` : "Hi there"}</h1>
       <SafeToSaveCard />
       <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
         <div className="lg:col-span-2">

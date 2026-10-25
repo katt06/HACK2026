@@ -3,7 +3,7 @@ export function PointsBurst({ points }: { points: number }) {
   return (
     <span
       aria-hidden
-      className="animate-points-burst pointer-events-none absolute left-1/2 top-0 z-20 whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1 text-lg font-bold text-white shadow-lg"
+      className="animate-points-burst pointer-events-none absolute left-1/2 top-0 z-20 whitespace-nowrap rounded-full border-2 border-coin-edge bg-coin px-3 py-1 text-lg font-black text-on-coin shadow-lg"
     >
       +{points} pts
     </span>
