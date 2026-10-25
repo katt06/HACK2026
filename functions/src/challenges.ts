@@ -13,7 +13,7 @@ import type {
   WithId,
 } from "./contract.js";
 import { expireStaleChallenges, loadBanditStats } from "./banditStore.js";
-import { pickChallenges } from "./logic/bandit.js";
+import { OPEN_STATUSES, pickChallenges } from "./logic/bandit.js";
 import { mergeCandidates, toCandidates, type ChallengeCandidate } from "./logic/challengeRules.js";
 import { addDays, todayIso } from "./logic/dates.js";
 import { takeRateLimitSlot } from "./logic/rateLimit.js";
@@ -35,7 +35,7 @@ const armKey = (c: { type: string; difficulty: string }) => `${c.type}_${c.diffi
 const byCreated = (a: WithId<ChallengeDoc>, b: WithId<ChallengeDoc>) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 
 async function loadActive(db: Firestore, uid: string): Promise<WithId<ChallengeDoc>[]> {
-  const snap = await db.collection("challenges").where("userId", "==", uid).where("status", "==", "active").get();
+  const snap = await db.collection("challenges").where("userId", "==", uid).where("status", "in", [...OPEN_STATUSES]).get();
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as ChallengeDoc) })).sort(byCreated);
 }
 
@@ -89,7 +89,7 @@ async function generateCandidates(db: Firestore, uid: string, active: ChallengeD
   }
 }
 
-// Returns the caller's active challenges, topping up to 3 with new ones when needed.
+// Returns the caller's open (offered or accepted) challenges, topping up to 3 with new ones when needed.
 export const getChallenges = onCall<GetChallengesRequest>(
   { secrets: [anthropicApiKey] },
   async (request): Promise<GetChallengesResponse> => {

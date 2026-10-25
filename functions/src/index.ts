@@ -4,6 +4,7 @@ import type { HealthResponse } from "./contract.js";
 
 initializeApp();
 
+export { acceptChallenge } from "./acceptChallenge.js";
 export { getChallenges } from "./challenges.js";
 export { completeChallenge } from "./completeChallenge.js";
 export { joinGroup } from "./groups.js";

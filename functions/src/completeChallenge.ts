@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import type { ChallengeDoc, CompleteChallengeRequest, CompleteChallengeResponse, ScoreDoc } from "./contract.js";
 import { banditOutcome } from "./banditStore.js";
+import { OPEN_STATUSES, statsDelta } from "./logic/bandit.js";
 import { recomputeScore } from "./scoreStore.js";
 import { requireAuth, requireString } from "./validate.js";
 
@@ -18,10 +19,10 @@ export const completeChallenge = onCall<CompleteChallengeRequest>(async (request
     const current = (await tx.get(ref)).data() as ChallengeDoc | undefined;
     // Same error for "missing" and "someone else's", so ids can't be probed.
     if (!current || current.userId !== uid) throw new HttpsError("not-found", "Challenge not found.");
-    if (current.status !== "active") throw new HttpsError("failed-precondition", `This challenge is already ${current.status}.`);
+    if (!OPEN_STATUSES.includes(current.status)) throw new HttpsError("failed-precondition", `This challenge is already ${current.status}.`);
     const completed: ChallengeDoc = { ...current, status: "completed", completedAt: new Date().toISOString() };
     tx.update(ref, { status: completed.status, completedAt: completed.completedAt });
-    const [statsRef, stats] = banditOutcome(db, uid, current, true);
+    const [statsRef, stats] = banditOutcome(db, uid, current, statsDelta(current.status, "complete"));
     tx.set(statsRef, stats, { merge: true });
     return completed;
   });

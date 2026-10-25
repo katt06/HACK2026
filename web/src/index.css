@@ -10,3 +10,34 @@
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
 }
+
+/* Points burst: rises from where it's placed and fades out. */
+@keyframes points-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.7);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -12px) scale(1.15);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -44px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -64px) scale(1);
+  }
+}
+
+.animate-points-burst {
+  animation: points-burst 1.4s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-points-burst {
+    animation: none;
+    opacity: 0;
+  }
+}

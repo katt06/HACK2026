@@ -28,7 +28,7 @@ export const DEFAULT_PERSONA: PersonaId = "demo-hero";
 // so joining with its code can be demoed in mock mode.
 export const MOCK_GROUPS: { id: string; name: string; inviteCode: string; members: PersonaId[] }[] = [
   {
-    id: "demo-squad",
+    id: "demo-group", // same id as the emulator seed
     name: "Demo Squad",
     inviteCode: "SQUAD7",
     members: ["steady-saver", "irregular-income", "demo-hero", "delivery-spender", "subscription-creep"],
@@ -287,8 +287,8 @@ export const PERSONAS: Persona[] = [
     ],
   },
   {
-    // Starts with 280 pts, right behind Riley (300) and just under level 4 (300).
-    // Completing the easy challenge on stage moves Alex up a rank and a level.
+    // Blended (points + improvement + 10 × streak) is 390, just behind Riley's 411, and 280 pts is
+    // just under level 4. Completing the easy challenge on stage (+30 pts) moves Alex up a rank and a level.
     id: "demo-hero",
     story: "Demo Hero",
     displayName: "Alex",
@@ -301,7 +301,7 @@ export const PERSONAS: Persona[] = [
     safetyBuffer: 3500,
     paydayInDays: 6,
     insight: "Coffee shops were about $48 last week, so today's challenge targets that.",
-    score: { goalProgressPct: 42, streak: 4, improvementScore: 63, points: 280 },
+    score: { goalProgressPct: 42, streak: 4, improvementScore: 70, points: 280 },
     goal: {
       name: "Spring break trip",
       targetAmount: 120000,

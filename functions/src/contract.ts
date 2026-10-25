@@ -61,7 +61,10 @@ export type Difficulty = "easy" | "medium" | "hard";
 
 // Points are fixed by difficulty (never chosen by the LLM), so generated challenges can't inflate the leaderboard.
 export const CHALLENGE_POINTS = { easy: 30, medium: 50, hard: 80 } as const satisfies Record<Difficulty, number>;
-export type ChallengeStatus = "active" | "completed" | "skipped" | "expired";
+
+// active = offered; accepted = the user said "I'm in" (counts as a bandit attempt); then completed.
+// Offers left for a week expire: ignored ones count as a failed attempt too.
+export type ChallengeStatus = "active" | "accepted" | "completed" | "skipped" | "expired";
 
 // Where generated copy came from. "template" is the rate-limit / failure fallback.
 export type TextSource = "llm" | "template";
@@ -280,7 +283,7 @@ export interface GetSafeToSaveResponse {
   breakdown: SafeToSaveBreakdown;
 }
 
-// getChallenges: returns the caller's active challenges, generating them if needed.
+// getChallenges: returns the caller's open (active or accepted) challenges, generating them if needed.
 export type GetChallengesRequest = EmptyRequest;
 
 export interface GetChallengesResponse {
@@ -288,6 +291,15 @@ export interface GetChallengesResponse {
 }
 
 // completeChallenge
+// acceptChallenge: active → accepted. Accepting twice is a no-op.
+export interface AcceptChallengeRequest {
+  challengeId: string;
+}
+
+export interface AcceptChallengeResponse {
+  challenge: WithId<ChallengeDoc>;
+}
+
 export interface CompleteChallengeRequest {
   challengeId: string;
 }
@@ -329,6 +341,7 @@ export interface JoinGroupResponse {
 export interface Callables {
   getSafeToSave: { request: GetSafeToSaveRequest; response: GetSafeToSaveResponse };
   getChallenges: { request: GetChallengesRequest; response: GetChallengesResponse };
+  acceptChallenge: { request: AcceptChallengeRequest; response: AcceptChallengeResponse };
   completeChallenge: { request: CompleteChallengeRequest; response: CompleteChallengeResponse };
   getLeaderboard: { request: GetLeaderboardRequest; response: GetLeaderboardResponse };
   joinGroup: { request: JoinGroupRequest; response: JoinGroupResponse };

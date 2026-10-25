@@ -49,6 +49,7 @@ const myGroupsQuery = (uid: string) => query(collection(db, "groups"), where("me
 export const realApi: Api = {
   getSafeToSave: () => call("getSafeToSave", {}),
   getChallenges: () => call("getChallenges", {}),
+  acceptChallenge: (challengeId) => call("acceptChallenge", { challengeId }),
   completeChallenge: (challengeId) => call("completeChallenge", { challengeId }),
   getLeaderboard: (groupId) => call("getLeaderboard", { groupId }),
   async getMyScore() {

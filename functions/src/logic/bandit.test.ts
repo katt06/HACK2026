@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BanditStatsDoc, ChallengeType, Difficulty } from "../contract.js";
 import { templateCandidates } from "../templates.js";
-import { allArms, armKey, banditStatsId, isExpired, pickChallenges, posterior, PRIOR_STRENGTH, sampleBeta, sampleGamma, statsByArm, updateStats } from "./bandit.js";
+import { allArms, armKey, banditStatsId, isExpired, pickChallenges, posterior, PRIOR_STRENGTH, sampleBeta, sampleGamma, statsByArm, statsDelta, updateStats } from "./bandit.js";
 import { mulberry32 } from "./random.js";
 
 const stat = (type: ChallengeType, difficulty: Difficulty, attempts: number, completions: number): BanditStatsDoc => ({
@@ -86,7 +86,19 @@ describe("outcomes", () => {
     expect(updateStats({ attempts: 3, completions: 1 }, false)).toEqual({ attempts: 4, completions: 1 });
   });
 
-  it("expires active challenges older than a week", () => {
+  it("counts every offer as exactly one attempt, whichever path it takes", () => {
+    // offered → accepted → completed
+    expect([statsDelta("active", "accept"), statsDelta("accepted", "complete")]).toEqual([{ attempts: 1, completions: 0 }, { attempts: 0, completions: 1 }]);
+    // offered → completed without accepting first
+    expect(statsDelta("active", "complete")).toEqual({ attempts: 1, completions: 1 });
+    // offered → accepted → left for a week (the failure was already counted at accept)
+    expect(statsDelta("accepted", "expire")).toEqual({ attempts: 0, completions: 0 });
+    // offered → ignored for a week
+    expect(statsDelta("active", "expire")).toEqual({ attempts: 1, completions: 0 });
+  });
+
+  it("expires open challenges (offered or accepted) older than a week", () => {
+    expect(isExpired({ status: "accepted", createdAt: "2026-10-17T11:00:00.000Z" }, new Date("2026-10-24T12:00:00.000Z"))).toBe(true);
     const now = new Date("2026-10-24T12:00:00.000Z");
     expect(isExpired({ status: "active", createdAt: "2026-10-17T11:00:00.000Z" }, now)).toBe(true);
     expect(isExpired({ status: "active", createdAt: "2026-10-18T12:00:00.000Z" }, now)).toBe(false);

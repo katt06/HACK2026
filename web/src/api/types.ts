@@ -1,4 +1,5 @@
 import type {
+  AcceptChallengeResponse,
   CompleteChallengeResponse,
   GetChallengesResponse,
   GetLeaderboardResponse,
@@ -28,6 +29,7 @@ export interface GoalDetail {
 export interface Api {
   getSafeToSave(): Promise<GetSafeToSaveResponse>;
   getChallenges(): Promise<GetChallengesResponse>;
+  acceptChallenge(challengeId: string): Promise<AcceptChallengeResponse>;
   completeChallenge(challengeId: string): Promise<CompleteChallengeResponse>;
   getLeaderboard(groupId: string): Promise<GetLeaderboardResponse>;
   getMyScore(): Promise<ScoreDoc | null>; // null until the user has a score doc

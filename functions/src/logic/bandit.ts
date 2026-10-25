@@ -2,11 +2,12 @@
 // Each arm's completion rate has a Beta posterior built from banditStats (see posterior() for the prior).
 // We draw one sample per arm and show the highest draws, so arms that work for this user win more often
 // while uncertain arms still get tried.
-import { CHALLENGE_TYPES, type BanditStatsDoc, type ChallengeDoc, type ChallengeType, type Difficulty } from "../contract.js";
+import { CHALLENGE_TYPES, type BanditStatsDoc, type ChallengeDoc, type ChallengeStatus, type ChallengeType, type Difficulty } from "../contract.js";
 import type { Rng } from "./random.js";
 
 export const DIFFICULTIES: readonly Difficulty[] = ["easy", "medium", "hard"];
-export const CHALLENGE_TTL_DAYS = 7; // left active longer than this = ignored, which counts as a failure
+export const CHALLENGE_TTL_DAYS = 7; // left open (offered or accepted) longer than this = expired, a failure
+export const OPEN_STATUSES: readonly ChallengeStatus[] = ["active", "accepted"];
 
 export type ArmKey = `${ChallengeType}_${Difficulty}`;
 export type ArmStats = Pick<BanditStatsDoc, "attempts" | "completions">;
@@ -129,8 +130,19 @@ export function updateStats(stats: ArmStats | undefined, success: boolean): ArmS
   return { attempts: (stats?.attempts ?? 0) + 1, completions: (stats?.completions ?? 0) + (success ? 1 : 0) };
 }
 
+export type ChallengeEvent = "accept" | "complete" | "expire";
+
+// How an event changes the arm's stats, given the challenge's status before it. Every offer ends up
+// counting exactly one attempt: when accepted, or when completed/expired without having been accepted.
+export function statsDelta(before: ChallengeStatus, event: ChallengeEvent): ArmStats {
+  const countsAttempt = before === "active" ? 1 : 0; // accepting already counted it
+  if (event === "accept") return { attempts: countsAttempt, completions: 0 };
+  if (event === "complete") return { attempts: countsAttempt, completions: 1 };
+  return { attempts: countsAttempt, completions: 0 };
+}
+
 export function isExpired(challenge: Pick<ChallengeDoc, "status" | "createdAt">, now: Date): boolean {
-  return challenge.status === "active" && now.getTime() - Date.parse(challenge.createdAt) > CHALLENGE_TTL_DAYS * 86_400_000;
+  return OPEN_STATUSES.includes(challenge.status) && now.getTime() - Date.parse(challenge.createdAt) > CHALLENGE_TTL_DAYS * 86_400_000;
 }
 
 export function banditStatsId(uid: string, arm: { type: ChallengeType; difficulty: Difficulty }): string {

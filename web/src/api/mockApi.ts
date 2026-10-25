@@ -14,6 +14,7 @@ import {
   type GroupDoc,
   type GroupSummary,
   type IsoDate,
+  type LeaderboardEntry,
   type ScoreDoc,
   type WithId,
 } from "@contract";
@@ -49,7 +50,15 @@ interface PersonaState {
   score: ScoreDoc;
   active: WithId<ChallengeDoc>[];
   nextSeed: number; // index into persona.challenges of the next refill
-  lastCompletedOn: IsoDate | null;
+}
+
+// Same ranking as the server (functions/src/logic/scoring.ts): points + improvement + 10 × weekly streak,
+// ties by points, then name.
+const blended = (s: ScoreDoc) => s.points + s.improvementScore + 10 * s.streak;
+function rankLikeServer(rows: Omit<LeaderboardEntry, "rank">[]): LeaderboardEntry[] {
+  return [...rows]
+    .sort((a, b) => blended(b) - blended(a) || b.points - a.points || a.displayName.localeCompare(b.displayName))
+    .map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
 export function levelFor(points: number): number {
@@ -105,7 +114,6 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           score: { ...p.score, userId: uidFor(p.id), level: levelFor(p.score.points) },
           active: [0, 1, 2].map((i) => challengeFrom(p, i, createdAt)),
           nextSeed: 3,
-          lastCompletedOn: null,
         },
       ]),
     );
@@ -234,6 +242,14 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
 
     getMyScore: () => respond("getMyScore", () => mine().score),
 
+    acceptChallenge: (challengeId) =>
+      respond("acceptChallenge", () => {
+        const c = mine().active.find((x) => x.id === challengeId);
+        if (!c) throw new FirebaseError("functions/not-found", "Challenge not found.");
+        c.status = "accepted";
+        return { challenge: c };
+      }),
+
     completeChallenge: (challengeId) =>
       respond("completeChallenge", (): CompleteChallengeResponse => {
         const s = mine();
@@ -247,16 +263,10 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
           completedAt: timestamp.toISOString(),
         };
 
+        // Challenges earn points. The streak is weekly saving, so it doesn't move here.
         const levelBefore = s.score.level;
-        const today = isoDate(timestamp);
         const points = s.score.points + challenge.points;
-        s.score = {
-          ...s.score,
-          points,
-          level: levelFor(points),
-          streak: s.lastCompletedOn === today ? s.score.streak : s.score.streak + 1,
-        };
-        s.lastCompletedOn = today;
+        s.score = { ...s.score, points, level: levelFor(points) };
 
         // Replace the completed challenge with the next seed, if any are left.
         const p = persona();
@@ -269,11 +279,14 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
     getLeaderboard: (groupId) =>
       respond("getLeaderboard", (): GetLeaderboardResponse => {
         const group = groups.get(groupId) ?? groups.get(MOCK_GROUPS[0].id)!;
-        const rows = PERSONAS.filter((p) => group.members.includes(uidFor(p.id))).map((p) => ({ ...state.get(p.id)!.score, displayName: p.displayName, isMe: p.id === settings.persona }));
-        rows.sort((a, b) => b.points - a.points);
+        const rows = PERSONAS.filter((p) => group.members.includes(uidFor(p.id))).map((p) => ({
+          ...state.get(p.id)!.score,
+          displayName: p.displayName,
+          isMe: p.id === settings.persona,
+        }));
         return {
           group: { id: groupId, name: group.name, inviteCode: group.inviteCode },
-          entries: rows.map((row, i) => ({ ...row, rank: i + 1 })),
+          entries: rankLikeServer(rows),
         };
       }),
 

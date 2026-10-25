@@ -52,12 +52,10 @@ describe("completeChallenge", () => {
     expect(challenges.map((c) => c.id)).not.toContain(first.id);
   });
 
-  it("only counts the streak once per day", async () => {
+  it("doesn't change the weekly saving streak", async () => {
     const { api } = setup();
-    const [a, b] = (await api.getChallenges()).challenges;
-    const first = await api.completeChallenge(a.id);
-    const second = await api.completeChallenge(b.id);
-    expect(second.score.streak).toBe(first.score.streak);
+    const [a] = (await api.getChallenges()).challenges;
+    expect((await api.completeChallenge(a.id)).score.streak).toBe(4);
   });
 
   it("rejects an already-completed challenge", async () => {
@@ -76,7 +74,7 @@ describe("completeChallenge", () => {
 });
 
 describe("getLeaderboard", () => {
-  it("ranks all personas by points with only score fields", async () => {
+  it("ranks all personas like the server, with only score fields", async () => {
     const { api } = setup();
     const { entries } = await api.getLeaderboard("g");
     expect(entries).toHaveLength(PERSONAS.length);
@@ -247,5 +245,17 @@ describe("getMyScore", () => {
     const [c] = (await api.getChallenges()).challenges;
     await api.completeChallenge(c.id);
     expect((await api.getMyScore())?.points).toBe(280 + c.points);
+  });
+});
+
+describe("acceptChallenge", () => {
+  it("marks a challenge accepted, keeps it open, and still allows completing it", async () => {
+    const { api } = setup();
+    const [c] = (await api.getChallenges()).challenges;
+    expect((await api.acceptChallenge(c.id)).challenge.status).toBe("accepted");
+    expect((await api.acceptChallenge(c.id)).challenge.status).toBe("accepted");
+    expect((await api.getChallenges()).challenges.find((x) => x.id === c.id)?.status).toBe("accepted");
+    expect((await api.completeChallenge(c.id)).challenge.status).toBe("completed");
+    await expect(api.acceptChallenge(c.id)).rejects.toMatchObject({ code: "functions/not-found" });
   });
 });
