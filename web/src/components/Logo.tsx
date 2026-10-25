@@ -1,5 +1,3 @@
-// The logo art has dark forest lettering, so full logos always sit on a cream panel (readable in dark mode).
-
 export function LogoBadge({ className = "h-9 w-9" }: { className?: string }) {
   return <img src="/brand/logo-badge.png" alt="" className={`object-contain ${className}`} />;
 }
@@ -16,10 +14,13 @@ export function LogoLockup({ size = "md" }: { size?: "md" | "lg" }) {
   );
 }
 
-export function LogoFull({ className = "h-40" }: { className?: string }) {
-  return (
-    <div className="rounded-3xl bg-cream p-4">
-      <img src="/brand/logo.png" alt="CapyBalance" className={`mx-auto object-contain ${className}`} />
-    </div>
-  );
+// Both logos have a white sticker outline, so they read on light and dark backgrounds.
+// The wide wordmark: phone header and login.
+export function LogoWordmark({ className = "h-9" }: { className?: string }) {
+  return <img src="/brand/logo-wordmark.png" alt="CapyBalance" className={`object-contain ${className}`} />;
+}
+
+// The stacked logo (capybara over the wordmark): desktop side rail.
+export function LogoFull({ className = "h-16" }: { className?: string }) {
+  return <img src="/brand/canvalogo.png" alt="CapyBalance" className={`object-contain ${className}`} />;
 }

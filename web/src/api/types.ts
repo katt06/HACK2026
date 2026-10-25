@@ -1,5 +1,7 @@
 import type {
   AcceptChallengeResponse,
+  Cents,
+  BadgeProgress,
   CompleteChallengeResponse,
   GetChallengesResponse,
   GetLeaderboardResponse,
@@ -8,6 +10,7 @@ import type {
   GoalEntryDoc,
   GroupSummary,
   IsoDate,
+  IsoDateTime,
   ScoreDoc,
   JoinGroupResponse,
   WithId,
@@ -20,9 +23,26 @@ export interface NewGoal {
   deadline: IsoDate; // after today
 }
 
+// The game layer: XP (never decreases; drives level and rank), spendable coins, and badges.
+export interface GameState {
+  xp: number;
+  level: number;
+  xpIntoLevel: number;
+  xpPerLevel: number;
+  coins: number;
+  badges: BadgeProgress[];
+}
+
 export interface GoalDetail {
   goal: WithId<GoalDoc>;
   entries: WithId<GoalEntryDoc>[]; // newest first
+}
+
+// My own history for the activity calendar: finished challenges, money added to goals, and the current streak.
+export interface Activity {
+  completedChallenges: { id: string; description: string; points: number; completedAt: IsoDateTime }[];
+  contributions: { goalName: string; amount: Cents; createdAt: IsoDateTime }[];
+  streak: number; // weeks, from my score doc
 }
 
 // The one interface both implementations satisfy. Components only see this.
@@ -33,6 +53,8 @@ export interface Api {
   completeChallenge(challengeId: string): Promise<CompleteChallengeResponse>;
   getLeaderboard(groupId: string): Promise<GetLeaderboardResponse>;
   getMyScore(): Promise<ScoreDoc | null>; // null until the user has a score doc
+  getGameState(): Promise<GameState>;
+  getActivity(): Promise<Activity>;
 
   getMyGroups(): Promise<GroupSummary[]>;
   // Live version: calls onChange now and on every change. Returns an unsubscribe function.

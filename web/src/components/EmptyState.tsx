@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-export type Mascot = "coin" | "drink";
+// coin = sitting in the grass with coins (planning), sitting = holding a coin, drink = sipping, float = swim ring + duck.
+export type Mascot = "coin" | "sitting" | "drink" | "float";
 
 // Friendly empty state with the capybara. Keep copy short and calm ("Nice and steady.").
 export function EmptyState({ mascot = "drink", title, children, action }: { mascot?: Mascot; title: string; children?: ReactNode; action?: ReactNode }) {

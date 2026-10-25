@@ -76,6 +76,9 @@ export interface UserDoc {
   displayName: string;
   baselineSpendByCategory: Partial<Record<Category, Cents>>; // typical monthly spend
   settings: UserSettings;
+  // Spendable shop currency (server-written; private to the user). Coins are earned 1:1 with XP but can go
+  // down when spent. Until the server tracks it, clients treat a missing value as "all XP, nothing spent".
+  coins?: number;
 }
 
 // goals/{id}
@@ -232,8 +235,55 @@ export interface ScoreDoc {
   // week where safe-to-save was $0 on more than 4 days, pause the streak instead of breaking it.
   streak: number;
   improvementScore: number; // 0–100: % drop in discretionary spend (last 30 days) vs. baseline
-  points: number;
+  points: number; // XP: never decreases; drives level and leaderboard rank
   level: number; // starts at 1
+  badges?: BadgeId[]; // earned badges (server-written; badges stay earned even if a streak later breaks)
+}
+
+// ---------- Game layer: levels and badges ----------
+
+export const XP_PER_LEVEL = 100; // same as POINTS_PER_LEVEL in logic/scoring.ts
+
+export function levelProgress(xp: number): { level: number; xpIntoLevel: number; xpPerLevel: number } {
+  const safe = Math.max(0, Math.floor(xp));
+  return { level: Math.floor(safe / XP_PER_LEVEL) + 1, xpIntoLevel: safe % XP_PER_LEVEL, xpPerLevel: XP_PER_LEVEL };
+}
+
+export type BadgeId = "first-float" | "chill-streak" | "yuzu-master";
+
+export const BADGES: Record<BadgeId, { name: string; hint: string; goal: number; unit: string }> = {
+  "first-float": { name: "First Float", hint: "Create your first goal", goal: 1, unit: "goal" },
+  "chill-streak": { name: "Chill Streak", hint: "Keep a 4-week saving streak", goal: 4, unit: "weeks" },
+  "yuzu-master": { name: "Yuzu Master", hint: "Complete 10 challenges", goal: 10, unit: "challenges" },
+};
+
+export const BADGE_ORDER: BadgeId[] = ["first-float", "chill-streak", "yuzu-master"];
+
+export interface BadgeStats {
+  goalsCreated: number;
+  streak: number; // weeks
+  challengesCompleted: number;
+}
+
+export interface BadgeProgress {
+  id: BadgeId;
+  earned: boolean;
+  progress: number; // capped at goal
+  goal: number;
+}
+
+// A badge is earned once its stat reaches the goal, and stays earned if it was earned before.
+export function evaluateBadges(stats: BadgeStats, alreadyEarned: readonly BadgeId[] = []): BadgeProgress[] {
+  const value: Record<BadgeId, number> = {
+    "first-float": stats.goalsCreated,
+    "chill-streak": stats.streak,
+    "yuzu-master": stats.challengesCompleted,
+  };
+  return BADGE_ORDER.map((id) => {
+    const goal = BADGES[id].goal;
+    const earned = alreadyEarned.includes(id) || value[id] >= goal;
+    return { id, earned, progress: earned ? goal : Math.min(goal, value[id]), goal };
+  });
 }
 
 // scoreViewers/{uid} (server-only): everyone who shares at least one group with uid.

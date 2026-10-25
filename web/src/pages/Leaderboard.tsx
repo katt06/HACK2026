@@ -5,6 +5,7 @@ import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { cardClass } from "../components/forms";
 import { EmptyState } from "../components/EmptyState";
+import { HerdChart } from "../components/HerdChart";
 import { ProgressBar } from "../components/ProgressBar";
 import { Skeleton } from "../components/Skeleton";
 
@@ -86,7 +87,7 @@ function Row({ entry, delta, rowRef }: { entry: LeaderboardEntry; delta: number;
       {/* Phones: level on the right of the name line, stats on a second line. Large screens: one column each. */}
       <span className="text-right lg:order-last">
         <span className="block font-extrabold">Lv {entry.level}</span>
-        <span className="block text-xs text-ink-muted lg:text-sm">{entry.points} pts</span>
+        <span className="block text-xs text-ink-muted lg:text-sm">{entry.points} XP</span>
       </span>
       <div className="col-span-2 col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted lg:contents lg:text-base lg:text-ink">
         <span className="flex items-center gap-2">
@@ -278,7 +279,7 @@ export default function Leaderboard() {
 
       {status === "ready" && groups?.length === 0 && (
         <EmptyState
-          mascot="drink"
+          mascot="coin"
           title="No herd yet"
           action={
             <Link to="/group" className="btn btn-primary">
@@ -292,6 +293,12 @@ export default function Leaderboard() {
 
       {status === "ready" && data && (
         <>
+          <section className={`${cardClass} mb-6`}>
+            <h2 className="mb-1 text-lg font-extrabold">Herd progress</h2>
+            <p className="mb-3 text-sm text-ink-muted">How far everyone is toward their own goal, and their weekly streaks.</p>
+            <HerdChart entries={data.entries} />
+          </section>
+          <h2 className="mb-2 text-lg font-extrabold">Rankings</h2>
           <ColumnHeaders />
           <ol className="space-y-2">
             {data.entries.map((e) => (

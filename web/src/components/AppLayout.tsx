@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { LogoFull, LogoLockup } from "./Logo";
+import { LogoFull, LogoWordmark } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
+import { CoinCounter } from "../game/CoinCounter";
+import { GameProvider, useGame } from "../game/GameContext";
+import { LevelBar } from "../game/LevelBar";
 
 const icon = (d: string) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7" aria-hidden>
@@ -30,13 +33,22 @@ const railClass = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export function AppLayout() {
+  return (
+    <GameProvider>
+      <AppShell />
+    </GameProvider>
+  );
+}
+
+function AppShell() {
   const { user, signOut } = useAuth();
+  const { state: game } = useGame();
 
   return (
     <div className="min-h-dvh lg:flex">
       {/* Side rail on large screens */}
       <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:shrink-0 lg:flex-col lg:border-r-2 lg:border-line lg:bg-surface lg:p-5">
-        <LogoFull className="h-28" />
+        <LogoFull className="mx-auto h-36" />
         <nav className="mt-6 flex flex-col gap-1.5">
           {NAV.map((item) => (
             <NavLink key={item.to} to={item.to} className={railClass}>
@@ -46,6 +58,12 @@ export function AppLayout() {
           ))}
         </nav>
         <div className="mt-auto space-y-3">
+          {game && (
+            <div className="card space-y-3 p-3">
+              <CoinCounter coins={game.coins} />
+              <LevelBar level={game.level} xpIntoLevel={game.xpIntoLevel} xpPerLevel={game.xpPerLevel} compact />
+            </div>
+          )}
           <ThemeToggle />
           <p className="truncate text-sm text-ink-muted">{user?.displayName ?? user?.email}</p>
           <button onClick={signOut} className="btn btn-secondary btn-sm">
@@ -56,10 +74,13 @@ export function AppLayout() {
 
       <div className="flex min-h-dvh flex-1 flex-col">
         <header className="flex items-center justify-between border-b-2 border-line bg-surface px-4 py-2.5 lg:hidden">
-          <LogoLockup />
-          <button onClick={signOut} className="btn btn-ghost btn-sm">
-            Sign out
-          </button>
+          <LogoWordmark />
+          <div className="flex items-center gap-1">
+            {game && <CoinCounter coins={game.coins} />}
+            <button onClick={signOut} className="btn btn-ghost btn-sm">
+              Sign out
+            </button>
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-32 lg:px-10 lg:pt-10 lg:pb-10">

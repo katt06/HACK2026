@@ -286,3 +286,51 @@ describe("safe-to-save history and balance", () => {
     expect(after.amount).toBe(before.amount - 5000);
   });
 });
+
+describe("getGameState", () => {
+  it("starts Alex at level 3 with separate coins and two of three badges", async () => {
+    const { api } = setup();
+    const g = await api.getGameState();
+    expect(g).toMatchObject({ xp: 280, level: 3, xpIntoLevel: 80, xpPerLevel: 100, coins: 120 });
+    expect(g.badges.map((b) => [b.id, b.earned, b.progress])).toEqual([
+      ["first-float", true, 1],
+      ["chill-streak", true, 4],
+      ["yuzu-master", false, 8],
+    ]);
+  });
+
+  it("completing challenges earns XP and coins together, levels up, then unlocks Yuzu Master", async () => {
+    const { api } = setup();
+    const [a, b] = (await api.getChallenges()).challenges;
+    await api.completeChallenge(a.id);
+    const afterOne = await api.getGameState();
+    expect(afterOne).toMatchObject({ level: 4, xp: 280 + a.points, coins: 120 + a.points });
+    expect(afterOne.badges[2].earned).toBe(false);
+    await api.completeChallenge(b.id);
+    expect((await api.getGameState()).badges[2]).toMatchObject({ id: "yuzu-master", earned: true, progress: 10 });
+  });
+
+  it("Sam has First Float from the seeded goal but not Chill Streak yet", async () => {
+    const { api, controls } = setup();
+    controls.persona("subscription-creep");
+    const g = await api.getGameState();
+    expect(g.badges[0].earned).toBe(true); // seeded goal
+    expect(g.badges[1]).toMatchObject({ earned: false, progress: 1, goal: 4 });
+  });
+});
+
+describe("getActivity", () => {
+  it("has dated history for the calendar, and completing a challenge adds today", async () => {
+    const { api } = setup();
+    const before = await api.getActivity();
+    expect(before.completedChallenges).toHaveLength(8); // Alex has 8 lifetime completions
+    expect(before.completedChallenges.every((c) => new Date(c.completedAt) < NOW)).toBe(true);
+    expect(before.contributions).toHaveLength(3);
+    expect(before.streak).toBe(4);
+
+    const [first] = (await api.getChallenges()).challenges;
+    await api.completeChallenge(first.id);
+    const after = await api.getActivity();
+    expect(after.completedChallenges.at(-1)).toMatchObject({ id: first.id, completedAt: NOW.toISOString() });
+  });
+});

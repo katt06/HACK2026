@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { FirebaseError } from "firebase/app";
 import { useAuth } from "../auth/AuthContext";
+import { LogoWordmark } from "../components/Logo";
 
 const FRIENDLY: Record<string, string> = {
   "auth/invalid-credential": "That email and password don't match.",
@@ -54,7 +55,7 @@ export default function Login() {
     <div className="min-h-dvh lg:grid lg:grid-cols-2">
       {/* Hero: brand art always sits on light cream/sky, so it reads the same in dark mode. */}
       <section className="relative flex flex-col items-center justify-center overflow-hidden bg-cream px-6 pt-8 pb-6 lg:min-h-dvh lg:py-12">
-        <img src="/brand/logo-wordmark.png" alt="CapyBalance" className="relative h-20 object-contain lg:h-28" />
+        <LogoWordmark className="relative h-24 lg:h-36" />
         <img src="/brand/mascot-coin.png" alt="" className="relative mt-2 h-40 object-contain lg:mt-6 lg:h-80" />
         <p className="relative mt-3 max-w-xs text-center text-lg font-extrabold text-forest lg:max-w-sm lg:text-2xl">
           Save with friends. Nice and steady.

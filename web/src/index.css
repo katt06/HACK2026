@@ -39,6 +39,8 @@
   --warn-ink: #7a5200;
   --warn-soft: #fdf1d3;
   --sky-soft: #e3f3f8;
+  --badge-locked: #d6cfbf; /* locked badge silhouette */
+  --badge-locked-2: #c4bcaa;
 }
 
 
@@ -63,6 +65,8 @@
   --warn-ink: #f5cf7a;
   --warn-soft: #3a2f12;
   --sky-soft: #1c3440;
+  --badge-locked: #3a4e43;
+  --badge-locked-2: #4a6053;
   color-scheme: dark;
 }
 
@@ -88,6 +92,8 @@
     --warn-ink: #f5cf7a;
     --warn-soft: #3a2f12;
     --sky-soft: #1c3440;
+  --badge-locked: #3a4e43;
+  --badge-locked-2: #4a6053;
     color-scheme: dark;
   }
 }

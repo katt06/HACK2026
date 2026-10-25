@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ChallengeDoc, ScoreDoc, WithId } from "@contract";
+import type { ChallengeDoc, WithId } from "@contract";
 import { api } from "../api";
 import { PageHeader } from "../components/AppLayout";
 import { Difficulty } from "../components/Difficulty";
@@ -8,19 +8,19 @@ import { cardClass } from "../components/forms";
 import { PointsBurst } from "../components/PointsBurst";
 import { Skeleton } from "../components/Skeleton";
 import { useCooldown } from "../lib/useCooldown";
-import { useCountUp } from "../lib/useCountUp";
+import { useGame } from "../game/GameContext";
+import { LevelBar } from "../game/LevelBar";
 
 const REFRESH_COOLDOWN_MS = 30_000;
 
 type Challenge = WithId<ChallengeDoc>;
 
-function ScorePill({ score }: { score: ScoreDoc | null }) {
-  const points = useCountUp(score?.points ?? 0);
-  if (!score) return null;
+function LevelCard() {
+  const { state } = useGame();
+  if (!state) return null;
   return (
-    <div className="card px-4 py-2 text-right">
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Level {score.level}</p>
-      <p className="text-xl font-extrabold tabular-nums text-link lg:text-2xl">{points} pts</p>
+    <div className="card w-44 shrink-0 px-4 py-3 lg:w-64">
+      <LevelBar level={state.level} xpIntoLevel={state.xpIntoLevel} xpPerLevel={state.xpPerLevel} compact />
     </div>
   );
 }
@@ -59,7 +59,7 @@ function ChallengeCard({
 
       <div className="flex items-center justify-between">
         <Difficulty level={challenge.difficulty} />
-        <span className="text-sm font-extrabold text-link">+{challenge.points} pts</span>
+        <span className="text-sm font-extrabold text-link">+{challenge.points} XP</span>
       </div>
 
       <p className="mt-3 flex-1 text-lg font-semibold leading-snug lg:text-xl">{challenge.description}</p>
@@ -75,7 +75,7 @@ function ChallengeCard({
 
       <div className="mt-4">
         {done ? (
-          <p className="rounded-2xl bg-coin px-4 py-3 text-center font-extrabold text-on-coin">Done! +{challenge.points} pts</p>
+          <p className="rounded-2xl bg-coin px-4 py-3 text-center font-extrabold text-on-coin">Done! +{challenge.points} XP</p>
         ) : challenge.status === "accepted" ? (
           <div className="space-y-2">
             <p className="text-center text-xs font-semibold uppercase tracking-wide text-link">You're in</p>
@@ -104,7 +104,7 @@ function ChallengeCard({
 
 export default function Challenges() {
   const [challenges, setChallenges] = useState<Challenge[] | null>(null);
-  const [score, setScore] = useState<ScoreDoc | null>(null);
+  const game = useGame();
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [bursts, setBursts] = useState<Record<string, number>>({});
   const [notice, setNotice] = useState("");
@@ -113,10 +113,9 @@ export default function Challenges() {
   const load = useCallback(() => {
     setStatus("loading");
     setBursts({});
-    Promise.all([api.getChallenges(), api.getMyScore().catch(() => null)]).then(
-      ([res, myScore]) => {
+    api.getChallenges().then(
+      (res) => {
         setChallenges(res.challenges);
-        setScore(myScore);
         setStatus("ready");
       },
       (err) => {
@@ -138,9 +137,9 @@ export default function Challenges() {
   async function complete(c: Challenge) {
     const res = await api.completeChallenge(c.id);
     replace(res.challenge);
-    setScore(res.score);
     setBursts((b) => ({ ...b, [c.id]: Date.now() }));
-    setNotice(res.leveledUp ? `Level ${res.score.level}! You earned ${res.pointsAwarded} points.` : `Nice and steady. +${res.pointsAwarded} points.`);
+    setNotice(`Nice and steady. +${res.pointsAwarded} XP and +${res.pointsAwarded} coins.`);
+    void game.refresh(); // coin counter, level bar, and any level-up or badge celebration
   }
 
   function refresh() {
@@ -156,7 +155,7 @@ export default function Challenges() {
     <>
       <div className="flex items-start justify-between gap-4">
         <PageHeader title="Challenges" subtitle="Small wins that add up." />
-        <ScorePill score={score} />
+        <LevelCard />
       </div>
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -202,7 +201,7 @@ export default function Challenges() {
         <>
           {open.length === 0 && (
             <div className="mb-4">
-              <EmptyState mascot="drink" title="All done. Time to chill.">
+              <EmptyState mascot="float" title="All done. Time to chill.">
                 New challenges show up as your spending changes. Check back later or tap Refresh.
               </EmptyState>
             </div>

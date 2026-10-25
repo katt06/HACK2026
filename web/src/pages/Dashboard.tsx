@@ -2,17 +2,20 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { GetSafeToSaveResponse, GoalDoc, ScoreDoc, WithId } from "@contract";
 import { api } from "../api";
+import { ActivityCalendar } from "../components/ActivityCalendar";
 import { useAuth } from "../auth/AuthContext";
 import { Difficulty } from "../components/Difficulty";
 import { cardClass } from "../components/forms";
 import { ProgressRing } from "../components/ProgressRing";
-import { ProgressBar } from "../components/ProgressBar";
 import { Skeleton } from "../components/Skeleton";
 import { TrackRecordChart } from "../components/TrackRecordChart";
 import { todayIso } from "../lib/dates";
 import { formatCents, formatDate } from "../lib/format";
 import { goalPlan, progressPct } from "../lib/goalMath";
 import { useAsync } from "../lib/useAsync";
+import { BadgeShelf } from "../game/Badges";
+import { useGame } from "../game/GameContext";
+import { LevelBar } from "../game/LevelBar";
 
 function Fallback({ children, onRetry, dark = false }: { children: ReactNode; onRetry: () => void; dark?: boolean }) {
   return (
@@ -172,7 +175,7 @@ function TopGoalBody({ goal }: { goal: WithId<GoalDoc> | undefined }) {
   if (!goal) {
     return (
       <div className="flex items-center gap-4">
-        <img src="/brand/mascot-coin.png" alt="" className="h-20 w-20 shrink-0 object-contain" />
+        <img src="/brand/mascot-sitting.png" alt="" className="h-20 w-20 shrink-0 object-contain" />
         <div>
           <p className="text-ink-muted">Pick something to save for and we'll work out an easy weekly pace.</p>
           <Link to="/goals" className="btn btn-primary btn-sm mt-3">
@@ -237,14 +240,56 @@ function StreakBody({ score }: { score: ScoreDoc | null }) {
         <span aria-hidden>🔥</span> {score.streak} {score.streak === 1 ? "week" : "weeks"}
       </p>
       <p className="mt-1 text-ink-muted">{score.streak >= 3 ? "Nice and steady." : "Keep it rolling."}</p>
-      <div className="mt-3">
-        <div className="mb-1 flex justify-between text-xs font-extrabold text-ink-muted">
-          <span>Level {score.level}</span>
-          <span>{score.points % 100}/100 pts</span>
-        </div>
-        <ProgressBar pct={score.points % 100} tone="coin" size="sm" label={`Progress to level ${score.level + 1}`} />
-      </div>
+      <StreakLevel />
     </div>
+  );
+}
+
+// XP toward the next level, from the game layer (same numbers as the header).
+function StreakLevel() {
+  const { state } = useGame();
+  if (!state) return null;
+  return (
+    <div className="mt-3">
+      <LevelBar level={state.level} xpIntoLevel={state.xpIntoLevel} xpPerLevel={state.xpPerLevel} compact />
+    </div>
+  );
+}
+
+// ---------- Calendar ----------
+
+function CalendarCard() {
+  const state = useAsync(api.getActivity);
+  return (
+    <section className={`${cardClass} mx-auto w-full max-w-xl`}>
+      <SectionTitle>Your month</SectionTitle>
+      {state.status === "loading" && <Skeleton className="h-80 w-full" />}
+      {state.status === "failed" && <Fallback onRetry={state.retry}>Your calendar will show up in a moment.</Fallback>}
+      {state.status === "ready" && <ActivityCalendar activity={state.data} />}
+    </section>
+  );
+}
+
+// ---------- Badges ----------
+
+function BadgesCard() {
+  const { state } = useGame();
+  return (
+    <section className={cardClass}>
+      <SectionTitle>Badges</SectionTitle>
+      {state ? (
+        <BadgeShelf badges={state.badges} />
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-2">
+              <Skeleton className="h-24 w-24 rounded-full" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -277,7 +322,7 @@ function ChallengesSection() {
             <Link key={c.id} to="/challenges" className="card flex flex-col p-5 transition-colors hover:border-leaf">
               <div className="flex items-center justify-between">
                 <Difficulty level={c.difficulty} />
-                <span className="text-sm font-extrabold text-link">+{c.points} pts</span>
+                <span className="text-sm font-extrabold text-link">+{c.points} XP</span>
               </div>
               <p className="mt-3 font-medium lg:text-lg">{c.description}</p>
               <p className="mt-1 text-sm text-ink-muted">{c.reason}</p>
@@ -301,6 +346,8 @@ export default function Dashboard() {
         </div>
         <StreakCard />
       </div>
+      <CalendarCard />
+      <BadgesCard />
       <ChallengesSection />
     </div>
   );

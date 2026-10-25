@@ -2,6 +2,8 @@
 import { FirebaseError } from "firebase/app";
 import {
   MAX_GROUP_MEMBERS,
+  evaluateBadges,
+  levelProgress,
   normalizeInviteCode,
   toGroupSummary,
   GOAL_NAME_MAX,
@@ -23,7 +25,7 @@ import { formatCents } from "../lib/format";
 import { addDays as addIsoDays, todayIso } from "../lib/dates";
 import { generateInviteCode } from "../lib/inviteCode";
 import { DEFAULT_PERSONA, MOCK_GROUPS, PERSONAS, type ChallengeSeed, type Persona, type PersonaId } from "./mockData";
-import type { Api, ApiMethod } from "./types";
+import type { Activity, Api, ApiMethod } from "./types";
 
 export interface MockSettings {
   persona: PersonaId; // whose data "me" is
@@ -49,6 +51,9 @@ export interface MockControls {
 
 interface PersonaState {
   score: ScoreDoc;
+  coins: number;
+  challengesCompleted: number;
+  history: Activity["completedChallenges"]; // dated completions for the calendar
   active: WithId<ChallengeDoc>[];
   nextSeed: number; // index into persona.challenges of the next refill
 }
@@ -104,6 +109,19 @@ function seededRandom(seed: string): () => number {
   };
 }
 
+// Up to 30 of a persona's lifetime completions, spread over the last 6 weeks (stable per persona).
+export function mockChallengeHistory(p: Persona, now: Date): Activity["completedChallenges"] {
+  const rand = seededRandom(`${p.id}-challenges`);
+  const n = Math.min(p.challengesCompleted, 30);
+  return Array.from({ length: n }, (_, i) => {
+    const seed = p.challenges[i % p.challenges.length];
+    const daysAgo = 1 + Math.floor(((n - 1 - i) * 41) / Math.max(1, n) + rand() * 2);
+    const day = addDays(now, -daysAgo);
+    day.setHours(9 + Math.floor(rand() * 11), 0, 0, 0);
+    return { id: `${p.id}-done-${i + 1}`, description: seed.description, points: seed.points, completedAt: day.toISOString() };
+  });
+}
+
 // 30 days of balance and left-over ending exactly at today's values. Walks backwards from today, undoing
 // each day: add back everyday spending and last month's bills (all treated as monthly), and take out
 // paychecks (every 14 days before the next one), sized so a month's income covers bills plus spending.
@@ -150,6 +168,9 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         p.id,
         {
           score: { ...p.score, userId: uidFor(p.id), level: levelFor(p.score.points) },
+          coins: p.coins,
+          challengesCompleted: p.challengesCompleted,
+          history: mockChallengeHistory(p, now()),
           active: [0, 1, 2].map((i) => challengeFrom(p, i, createdAt)),
           nextSeed: 3,
         },
@@ -283,6 +304,31 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
 
     getMyScore: () => respond("getMyScore", () => mine().score),
 
+    getGameState: () =>
+      respond("getGameState", () => {
+        const s = mine();
+        const goalsCreated = [...goals.values()].filter((g) => g.goal.ownerId === uidFor(settings.persona)).length;
+        return {
+          xp: s.score.points,
+          ...levelProgress(s.score.points),
+          coins: s.coins,
+          badges: evaluateBadges({ goalsCreated, streak: s.score.streak, challengesCompleted: s.challengesCompleted }),
+        };
+      }),
+
+    getActivity: () =>
+      respond("getActivity", (): Activity => {
+        const s = mine();
+        const myGoals = [...goals.values()].filter((g) => g.goal.ownerId === uidFor(settings.persona));
+        return {
+          completedChallenges: s.history,
+          contributions: myGoals.flatMap(({ goal, entries }) =>
+            entries.flatMap((e) => (e.kind === "contribution" ? [{ goalName: goal.name, amount: e.amount, createdAt: e.createdAt }] : [])),
+          ),
+          streak: s.score.streak,
+        };
+      }),
+
     acceptChallenge: (challengeId) =>
       respond("acceptChallenge", () => {
         const c = mine().active.find((x) => x.id === challengeId);
@@ -308,6 +354,9 @@ export function createMockApi(options: MockOptions = {}): { api: Api; controls: 
         const levelBefore = s.score.level;
         const points = s.score.points + challenge.points;
         s.score = { ...s.score, points, level: levelFor(points) };
+        s.coins += challenge.points; // coins are earned 1:1 with XP
+        s.challengesCompleted += 1;
+        s.history.push({ id: challenge.id, description: challenge.description, points: challenge.points, completedAt: challenge.completedAt! });
 
         // Replace the completed challenge with the next seed, if any are left.
         const p = persona();

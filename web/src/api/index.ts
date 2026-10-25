@@ -4,7 +4,7 @@ import { createMockApi, type MockControls, type MockSettings } from "./mockApi";
 import { realApi } from "./realApi";
 import type { Api } from "./types";
 
-export type { Api, GoalDetail, NewGoal } from "./types";
+export type { Activity, Api, GameState, GoalDetail, NewGoal } from "./types";
 
 const SETTINGS_KEY = "mockApi.settings";
 

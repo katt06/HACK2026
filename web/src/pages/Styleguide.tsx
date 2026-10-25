@@ -3,10 +3,16 @@ import { Link } from "react-router-dom";
 import { Button, type ButtonVariant } from "../components/Button";
 import { Difficulty } from "../components/Difficulty";
 import { EmptyState } from "../components/EmptyState";
-import { LogoBadge, LogoFull, LogoLockup } from "../components/Logo";
+import { LogoBadge, LogoFull, LogoLockup, LogoWordmark } from "../components/Logo";
 import { Pill } from "../components/Pill";
 import { ProgressBar } from "../components/ProgressBar";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { AnimatePresence } from "framer-motion";
+import { BADGE_ORDER, BADGES, levelProgress } from "@contract";
+import { BadgeTile } from "../game/Badges";
+import { Celebration, type CelebrationItem } from "../game/Celebration";
+import { CoinCounter } from "../game/CoinCounter";
+import { LevelBar } from "../game/LevelBar";
 
 // Re-render when the theme changes (toggle or system), so swatches show live values.
 function useThemeVersion(): number {
@@ -74,7 +80,7 @@ const SEMANTIC: { name: string; v: string; use: string }[] = [
   { name: "primary", v: "--primary", use: "Buttons, links (leaf, deepened for contrast)" },
   { name: "primary-edge", v: "--primary-edge", use: "Button bottom edge" },
   { name: "primary-soft", v: "--primary-soft", use: "Selected / success backgrounds" },
-  { name: "link", v: "--link", use: "Green text: links, +pts (mint in dark)" },
+  { name: "link", v: "--link", use: "Green text: links, +XP (mint in dark)" },
   { name: "coin-edge", v: "--coin-edge", use: "Coin button edge" },
   { name: "danger", v: "--danger", use: "Errors" },
   { name: "danger-soft", v: "--danger-soft", use: "Error backgrounds" },
@@ -120,6 +126,10 @@ const STATES: { label: string; cls?: string; disabled?: boolean; loading?: boole
 export default function Styleguide() {
   useThemeVersion();
   const [pct, setPct] = useState(42);
+  const [coins, setCoins] = useState(120);
+  const [xp, setXp] = useState(280);
+  const [celebration, setCelebration] = useState<CelebrationItem | null>(null);
+  const lp = levelProgress(xp);
 
   return (
     <main className="mx-auto max-w-6xl space-y-14 px-4 py-8 lg:px-10 lg:py-12">
@@ -217,7 +227,7 @@ export default function Styleguide() {
           <Button>Medium</Button>
           <Button size="lg">Large</Button>
           <Button variant="coin" size="lg">
-            Claim +30 pts
+            Claim +30 coins
           </Button>
           <div className="w-full sm:w-64">
             <Button block>Full width</Button>
@@ -234,7 +244,7 @@ export default function Styleguide() {
           <div className="card p-5">
             <div className="flex items-center justify-between">
               <Difficulty level="medium" />
-              <span className="text-sm font-extrabold text-link">+50 pts</span>
+              <span className="text-sm font-extrabold text-link">+50 XP</span>
             </div>
             <p className="mt-3 text-lg font-extrabold">Pick one no-spend day before Sunday.</p>
             <Button block className="mt-4">
@@ -244,7 +254,7 @@ export default function Styleguide() {
           <div className="rounded-2xl border-2 border-leaf bg-primary-soft p-5">
             <p className="text-lg font-extrabold text-heading">Selected / done</p>
             <p className="mt-1 text-ink-muted">Leaf border on a soft green fill.</p>
-            <p className="mt-3 rounded-2xl bg-coin px-4 py-3 text-center font-extrabold text-on-coin">Done! +30 pts</p>
+            <p className="mt-3 rounded-2xl bg-coin px-4 py-3 text-center font-extrabold text-on-coin">Done! +30 XP</p>
           </div>
           <div className="card p-5">
             <p className="text-xs font-extrabold uppercase tracking-wide text-ink-muted">Chill streak</p>
@@ -323,6 +333,55 @@ export default function Styleguide() {
         </div>
       </Section>
 
+      <Section
+        title="Game layer"
+        note="XP never goes down and sets level and rank. Coins are earned with XP but can be spent. Animations stay under 1.5s and turn into fades with reduced motion."
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="card space-y-4 p-5">
+            <p className="font-extrabold text-heading">Coin counter</p>
+            <CoinCounter coins={coins} size="lg" />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="coin" onClick={() => setCoins((c) => c + 30)}>
+                Earn 30
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setCoins((c) => Math.max(0, c - 20))}>
+                Spend 20
+              </Button>
+            </div>
+          </div>
+          <div className="card space-y-4 p-5">
+            <p className="font-extrabold text-heading">Level bar</p>
+            <LevelBar level={lp.level} xpIntoLevel={lp.xpIntoLevel} xpPerLevel={lp.xpPerLevel} />
+            <LevelBar level={lp.level} xpIntoLevel={lp.xpIntoLevel} xpPerLevel={lp.xpPerLevel} compact />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => setXp((x) => x + 25)}>
+                + 25 XP
+              </Button>
+              <span className="self-center text-sm font-extrabold tabular-nums text-ink-muted">{xp} XP total</span>
+            </div>
+          </div>
+        </div>
+        <div className="card p-5">
+          <p className="mb-4 font-extrabold text-heading">Badges: earned and locked</p>
+          <div className="grid grid-cols-3 gap-y-6 lg:grid-cols-6">
+            {BADGE_ORDER.map((id) => (
+              <BadgeTile key={`${id}-on`} badge={{ id, earned: true, progress: BADGES[id].goal, goal: BADGES[id].goal }} />
+            ))}
+            {BADGE_ORDER.map((id, i) => (
+              <BadgeTile key={`${id}-off`} badge={{ id, earned: false, progress: [0, 2, 8][i], goal: BADGES[id].goal }} />
+            ))}
+          </div>
+        </div>
+        <div className="card flex flex-wrap items-center gap-3 p-5">
+          <p className="font-extrabold text-heading">Celebrations</p>
+          <Button onClick={() => setCelebration({ kind: "level", level: 4 })}>Preview level-up</Button>
+          <Button variant="coin" onClick={() => setCelebration({ kind: "badge", id: "yuzu-master" })}>
+            Preview badge unlock
+          </Button>
+        </div>
+      </Section>
+
       <Section title="Bottom tab bar" note="Large icons, short labels, active tab in a mint pill.">
         <div className="mx-auto max-w-sm overflow-hidden rounded-2xl border-2 border-line">
           <div className="grid grid-cols-5 bg-surface px-1 pt-2 pb-2">
@@ -358,36 +417,33 @@ export default function Styleguide() {
 
       <Section title="Empty state" note="Mascot + one-line title + short body + optional action.">
         <div className="grid gap-4 md:grid-cols-2">
-          <EmptyState mascot="drink" title="All done. Time to chill.">
+          <EmptyState mascot="float" title="All done. Time to chill.">
             New challenges show up as your spending changes.
           </EmptyState>
-          <EmptyState mascot="coin" title="No goals yet" action={<Button>Create a goal</Button>}>
+          <EmptyState mascot="sitting" title="No goals yet" action={<Button>Create a goal</Button>}>
             Pick something you'd love to have in a few months.
           </EmptyState>
         </div>
       </Section>
 
-      <Section title="Brand assets" note="Full logos sit on cream so the forest lettering stays readable in dark mode.">
+      <Section title="Brand assets" note="Both logos have a white sticker outline, so they read in light and dark mode.">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="card p-4">
-            <LogoFull className="h-48" />
-            <p className="mt-2 text-sm font-extrabold text-ink-muted">logo.png · side rail</p>
-          </div>
-          <div className="card p-4">
-            <div className="rounded-3xl bg-cream p-4">
-              <img src="/brand/logo-wordmark.png" alt="CapyBalance wordmark" className="mx-auto h-48 object-contain" />
+          <div className="card flex flex-col p-4 md:col-span-2">
+            <div className="flex flex-1 items-center justify-center">
+              <LogoWordmark className="h-24" />
             </div>
-            <p className="mt-2 text-sm font-extrabold text-ink-muted">logo-wordmark.png · login</p>
+            <p className="mt-2 text-sm font-extrabold text-ink-muted">logo-wordmark.png · phone header, login</p>
           </div>
           <div className="card flex flex-col p-4">
-            <div className="flex flex-1 items-center justify-center rounded-3xl bg-surface-2 p-4">
-              <LogoLockup size="lg" />
-            </div>
-            <p className="mt-2 text-sm font-extrabold text-ink-muted">Badge + Nunito lockup · phone header</p>
+            <LogoFull className="mx-auto h-32" />
+            <p className="mt-2 text-sm font-extrabold text-ink-muted">canvalogo.png · desktop side rail</p>
           </div>
           {[
-            ["mascot-coin.png", "Login hero, goal empty states"],
-            ["mascot-drink.png", "Challenge & leaderboard empty states"],
+            ["mascot-coin.png", "Login hero, leaderboard empty state"],
+            ["mascot-sitting.png", "Goal empty states"],
+            ["mascot-float.png", "Challenges cleared"],
+            ["mascot-drink.png", "Group empty state"],
+            ["icon-sticker.png", "Level-up avatar"],
             ["icon-light.png", "Favicon / app icon"],
             ["icon-dark.png", "App icon (dark)"],
             ["logo-badge.png", "Header badge"],
@@ -403,6 +459,7 @@ export default function Styleguide() {
           ))}
         </div>
       </Section>
+      <AnimatePresence>{celebration && <Celebration key={JSON.stringify(celebration)} item={celebration} onDismiss={() => setCelebration(null)} />}</AnimatePresence>
     </main>
   );
 }

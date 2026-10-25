@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { FirebaseError } from "firebase/app";
 import type { GoalEntryDoc, WithId } from "@contract";
 import { api, type GoalDetail as GoalDetailData } from "../api";
+import { useGame } from "../game/GameContext";
 import { cardClass, inputClass, primaryButton } from "../components/forms";
+import { GoalTimelineChart } from "../components/GoalTimelineChart";
 import { ProgressRing } from "../components/ProgressRing";
 import { todayIso } from "../lib/dates";
 import { formatCents, formatDate, parseDollars } from "../lib/format";
@@ -68,6 +70,7 @@ function FromBalance({ amountCents, onPick }: { amountCents: number | null; onPi
 }
 
 function ContributeForm({ goalId, onDone }: { goalId: string; onDone: (msg: string) => void }) {
+  const { refresh } = useGame();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -80,6 +83,7 @@ function ContributeForm({ goalId, onDone }: { goalId: string; onDone: (msg: stri
     setBusy(true);
     try {
       await api.addContribution(goalId, cents, note);
+      void refresh(); // goal progress can earn XP
       onDone(`Added ${formatCents(cents)}. It shows as unverified until a linked bank account confirms it.`);
     } catch {
       setError("Couldn't save that right now. Please try again.");
@@ -308,6 +312,11 @@ export default function GoalDetail() {
           {panel === "contribute" ? <ContributeForm goalId={goal.id} onDone={done} /> : <ExpenseFlow data={data} onDone={done} />}
         </section>
       )}
+
+      <section className={`${cardClass} mt-4`}>
+        <h2 className="mb-2 text-lg font-extrabold">Progress over time</h2>
+        <GoalTimelineChart goal={goal} entries={entries} />
+      </section>
 
       <section className={`${cardClass} mt-4`}>
         <h2 className="text-lg font-extrabold">Activity</h2>

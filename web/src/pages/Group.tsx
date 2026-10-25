@@ -168,7 +168,7 @@ export default function Group() {
         )}
         {!groups && !loadFailed && <div className={`${card} animate-pulse text-ink-faint`}>Loading your groups…</div>}
         {groups?.length === 0 && (
-          <EmptyState mascot="coin" title="Saving's better together">
+          <EmptyState mascot="drink" title="Saving's better together">
             Start a group below, or join a friend's with their code.
           </EmptyState>
         )}

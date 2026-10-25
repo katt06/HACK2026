@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GOAL_NAME_MAX, type GoalDoc, type WithId } from "@contract";
 import { api } from "../api";
+import { useGame } from "../game/GameContext";
 import { PageHeader } from "../components/AppLayout";
 import { cardClass, inputClass, primaryButton } from "../components/forms";
 import { EmptyState } from "../components/EmptyState";
@@ -19,6 +20,7 @@ function paceLine(goal: GoalDoc): string {
 
 function CreateGoalForm() {
   const navigate = useNavigate();
+  const { refresh } = useGame();
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [deadline, setDeadline] = useState(addDays(todayIso(), 90));
@@ -36,6 +38,7 @@ function CreateGoalForm() {
     setBusy(true);
     try {
       const goal = await api.createGoal({ name, targetAmount, deadline });
+      void refresh(); // may unlock First Dip
       navigate(`/goals/${goal.id}`);
     } catch {
       setError("Couldn't create the goal right now. Please try again.");
@@ -79,7 +82,7 @@ export default function Goals() {
         {failed && <p className={`${cardClass} text-ink-muted`}>Couldn't load your goals. Pull to refresh or try again soon.</p>}
         {!goals && !failed && <div className={`${cardClass} animate-pulse text-ink-faint`}>Loading your goals…</div>}
         {goals?.length === 0 && (
-          <EmptyState mascot="coin" title="No goals yet">
+          <EmptyState mascot="sitting" title="No goals yet">
             Pick something you'd love to have in a few months. We'll find a pace that feels easy.
           </EmptyState>
         )}
