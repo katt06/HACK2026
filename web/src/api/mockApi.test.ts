@@ -52,12 +52,10 @@ describe("completeChallenge", () => {
     expect(challenges.map((c) => c.id)).not.toContain(first.id);
   });
 
-  it("only counts the streak once per day", async () => {
+  it("doesn't change the weekly saving streak", async () => {
     const { api } = setup();
-    const [a, b] = (await api.getChallenges()).challenges;
-    const first = await api.completeChallenge(a.id);
-    const second = await api.completeChallenge(b.id);
-    expect(second.score.streak).toBe(first.score.streak);
+    const [a] = (await api.getChallenges()).challenges;
+    expect((await api.completeChallenge(a.id)).score.streak).toBe(4);
   });
 
   it("rejects an already-completed challenge", async () => {
@@ -76,7 +74,7 @@ describe("completeChallenge", () => {
 });
 
 describe("getLeaderboard", () => {
-  it("ranks all personas by points with only score fields", async () => {
+  it("ranks all personas like the server, with only score fields", async () => {
     const { api } = setup();
     const { entries } = await api.getLeaderboard("g");
     expect(entries).toHaveLength(PERSONAS.length);
