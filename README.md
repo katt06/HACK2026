@@ -1,3 +1,4 @@
+## Overview
 CapyBalance is a savings game for people who've never had a budget survive past Tuesday. It works out how much you can safely move to a goal before payday, hands you three small challenges a week that Claude wrote from your own spending, and lets you race your friends without anyone ever seeing a dollar amount. Finish challenges, earn coins, and dress up your pixel capybara.
 
 The more challenges you finish, the better it gets at picking ones you'll actually finish.
@@ -6,7 +7,7 @@ The more challenges you finish, the better it gets at picking ones you'll actual
   <img src="web/public/brand/logo-wordmark.png" alt="CapyBalance" width="420">
 </p>
 
-## How to run:
+## How to run
 ```bash
 npm install
 npm run dev      # emulators + functions + web app → http://localhost:5173
