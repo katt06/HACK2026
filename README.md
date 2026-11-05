@@ -1,12 +1,10 @@
-<p align="center">
-  <img src="web/public/brand/logo-wordmark.png" alt="CapyBalance" width="420">
-</p>
-
-<p align="center"><b>Save with friends. Nice and steady.</b></p>
-
 CapyBalance is a savings game for people who've never had a budget survive past Tuesday. It works out how much you can safely move to a goal before payday, hands you three small challenges a week that Claude wrote from your own spending, and lets you race your friends without anyone ever seeing a dollar amount. Finish challenges, earn coins, and dress up your pixel capybara.
 
 The more challenges you finish, the better it gets at picking ones you'll actually finish.
+
+<p align="center">
+  <img src="web/public/brand/logo-wordmark.png" alt="CapyBalance" width="420">
+</p>
 
 ```bash
 npm install
