@@ -6,6 +6,7 @@ The more challenges you finish, the better it gets at picking ones you'll actual
   <img src="web/public/brand/logo-wordmark.png" alt="CapyBalance" width="420">
 </p>
 
+## How to run:
 ```bash
 npm install
 npm run dev      # emulators + functions + web app → http://localhost:5173
